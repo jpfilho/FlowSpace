@@ -1,0 +1,67 @@
+name: flowspace
+description: FlowSpace — Plataforma premium de produtividade e gestão.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+
+dependencies:
+  flutter_skill: ^0.2.6
+  flutter:
+    sdk: flutter
+
+  # Backend
+  supabase_flutter: ^2.8.4
+
+  # State Management
+  flutter_riverpod: ^2.6.1
+  riverpod_annotation: ^2.6.1
+
+  # Navigation
+  go_router: ^14.8.1
+
+  # Models / Serialization
+  freezed_annotation: ^2.4.4
+  json_annotation: ^4.9.0
+
+  # UI / Fonts
+  google_fonts: ^6.2.1
+  flutter_animate: ^4.5.2
+
+  # Utils
+  intl: ^0.19.0
+  shared_preferences: ^2.5.5
+  uuid: ^4.5.1
+  timeago: ^3.7.0
+  url_launcher: ^6.3.1
+
+  # File handling
+  file_picker: ^8.1.7
+
+  # Charts
+  fl_chart: ^0.70.2
+
+  # Markdown
+  flutter_markdown: ^0.7.4
+  http: ^1.6.0
+  aad_oauth: ^1.0.1
+  supabase: ^2.10.4
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+  build_runner: ^2.4.14
+  freezed: ^2.5.8
+  json_serializable: ^6.9.3
+  riverpod_generator: ^2.6.3
+
+dependency_overrides:
+  characters: 1.4.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
+    - assets/icons/
