@@ -11,6 +11,7 @@ import 'core/services/realtime_service.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+
   // Register timeago locale
   timeago.setLocaleMessages('pt_BR', timeago.PtBrMessages());
 

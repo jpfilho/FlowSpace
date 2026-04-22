@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/index.dart';
 import '../../../shared/widgets/common/flow_tags.dart';
 import '../../auth/domain/data_providers.dart';
+import '../../tasks/presentation/edit_task_sheet.dart';
 import 'weekly_review_wizard.dart';
 
 class GtdPage extends ConsumerStatefulWidget {
@@ -350,10 +351,31 @@ class _InboxItemCardState extends ConsumerState<_InboxItemCard> {
                     // mark as processed + create task
                     await ref.read(gtdInboxProvider.notifier)
                         .markProcessed(widget.item.id);
-                    await ref.read(tasksProvider.notifier).createTask(
+                    final result = await ref.read(tasksProvider.notifier).createTask(
                       title: widget.item.content,
                     );
-                    if (context.mounted) {
+                    if (!context.mounted) return;
+                    if (result.error != null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(result.error!),
+                          backgroundColor: AppColors.error,
+                          duration: const Duration(seconds: 3),
+                        ),
+                      );
+                      return;
+                    }
+                    // Busca a tarefa recém-criada e abre o editor
+                    final tasks = ref.read(tasksProvider).valueOrNull ?? [];
+                    final newTask = tasks.where((t) => t.id == result.id).firstOrNull;
+                    if (newTask != null) {
+                      showModalBottomSheet(
+                        context: context,
+                        isScrollControlled: true,
+                        backgroundColor: Colors.transparent,
+                        builder: (_) => EditTaskSheet(task: newTask),
+                      );
+                    } else {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
                           content: Text('Convertido em tarefa!'),

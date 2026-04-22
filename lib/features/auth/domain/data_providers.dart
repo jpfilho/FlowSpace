@@ -227,7 +227,7 @@ class TasksNotifier extends AsyncNotifier<List<TaskData>> {
     state = await AsyncValue.guard(() => _fetchTasks());
   }
 
-  Future<String?> createTask({
+  Future<({String? id, String? error})> createTask({
     required String title,
     String status = 'todo',
     String priority = 'medium',
@@ -236,14 +236,14 @@ class TasksNotifier extends AsyncNotifier<List<TaskData>> {
     DateTime? dueDate,
   }) async {
     final workspace = await ref.read(currentWorkspaceProvider.future);
-    if (workspace == null) return 'Nenhum workspace encontrado';
+    if (workspace == null) return (id: null, error: 'Nenhum workspace encontrado');
 
     final user = ref.read(currentUserProvider);
-    if (user == null) return 'Não autenticado';
+    if (user == null) return (id: null, error: 'Não autenticado');
 
     final client = ref.read(supabaseProvider);
     try {
-      await client.from('tasks').insert({
+      final result = await client.from('tasks').insert({
         'workspace_id': workspace.id,
         'title': title.trim(),
         'status': status,
@@ -253,11 +253,11 @@ class TasksNotifier extends AsyncNotifier<List<TaskData>> {
         if (dueDate != null) 'due_date': dueDate.toIso8601String(),
         'created_by': user.id,
         'assignee_id': user.id,
-      });
+      }).select('id').single();
       await refresh();
-      return null; // success
+      return (id: result['id'] as String?, error: null);
     } catch (e) {
-      return 'Erro ao criar tarefa: $e';
+      return (id: null, error: 'Erro ao criar tarefa: $e');
     }
   }
 

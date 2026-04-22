@@ -11,6 +11,7 @@ import '../../auth/domain/data_providers.dart';
 import '../../members/presentation/members_page.dart' show workspaceMembersProvider;
 import 'edit_task_sheet.dart';
 import 'widgets/gantt_view.dart';
+import 'widgets/tasks_table_view.dart';
 
 final _viewProvider = StateProvider<String>((ref) => 'gantt'); // list | kanban | gantt
 
@@ -18,6 +19,7 @@ final _viewProvider = StateProvider<String>((ref) => 'gantt'); // list | kanban 
 final _statusFilterProvider = StateProvider<String>((ref) => 'all');
 final _priorityFilterProvider = StateProvider<String>((ref) => 'all');
 final _dueTodayFilterProvider = StateProvider<bool>((ref) => false);
+final _noDateFilterProvider = StateProvider<bool>((ref) => false);
 final _projectFilterProvider = StateProvider<String?>((ref) => null);
 final _assigneeFilterProvider = StateProvider<String?>((ref) => null);
 
@@ -61,6 +63,7 @@ class TasksPage extends ConsumerWidget {
                 final statusFilter = ref.watch(_statusFilterProvider);
                 final priorityFilter = ref.watch(_priorityFilterProvider);
                 final dueTodayOnly = ref.watch(_dueTodayFilterProvider);
+                final noDateOnly = ref.watch(_noDateFilterProvider);
                 final projectFilter = ref.watch(_projectFilterProvider);
                 final assigneeFilter = ref.watch(_assigneeFilterProvider);
                 final today = DateTime.now();
@@ -82,6 +85,8 @@ class TasksPage extends ConsumerWidget {
                         t.dueDate!.year, t.dueDate!.month, t.dueDate!.day);
                     if (due != todayDate) return false;
                   }
+                  // No date filter
+                  if (noDateOnly && t.dueDate != null) return false;
                   // Project filter
                   if (projectFilter != null && t.projectId != projectFilter) {
                     return false;
@@ -95,6 +100,9 @@ class TasksPage extends ConsumerWidget {
 
                 if (view == 'gantt') {
                   return GanttView(tasks: filtered);
+                }
+                if (view == 'table') {
+                  return TasksTableView(tasks: filtered);
                 }
                 return view == 'kanban'
                     ? _KanbanView(tasks: filtered)
@@ -137,6 +145,7 @@ class _FilterBar extends ConsumerWidget {
     final currentStatus = ref.watch(_statusFilterProvider);
     final currentPriority = ref.watch(_priorityFilterProvider);
     final dueToday = ref.watch(_dueTodayFilterProvider);
+    final noDate = ref.watch(_noDateFilterProvider);
     final currentProject = ref.watch(_projectFilterProvider);
     final currentAssignee = ref.watch(_assigneeFilterProvider);
     final projects = ref.watch(projectsProvider).valueOrNull ?? [];
@@ -145,6 +154,7 @@ class _FilterBar extends ConsumerWidget {
     final hasActiveFilter = currentStatus != 'all' ||
         currentPriority != 'all' ||
         dueToday ||
+        noDate ||
         currentProject != null ||
         currentAssignee != null;
 
@@ -241,6 +251,7 @@ class _FilterBar extends ConsumerWidget {
                         ref.read(_statusFilterProvider.notifier).state = 'all';
                         ref.read(_priorityFilterProvider.notifier).state = 'all';
                         ref.read(_dueTodayFilterProvider.notifier).state = false;
+                        ref.read(_noDateFilterProvider.notifier).state = false;
                         ref.read(_projectFilterProvider.notifier).state = null;
                         ref.read(_assigneeFilterProvider.notifier).state = null;
                       },
@@ -390,6 +401,52 @@ class _FilterBar extends ConsumerWidget {
                               : FontWeight.w400,
                           color: dueToday
                               ? AppColors.warning
+                              : context.cTextMuted,
+                        ),
+                      ),
+                    ]),
+                  ),
+                ),
+                // No date toggle
+                const SizedBox(width: 6),
+                GestureDetector(
+                  onTap: () => ref
+                      .read(_noDateFilterProvider.notifier)
+                      .state = !noDate,
+                  child: AnimatedContainer(
+                    duration: AppAnimations.fast,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: noDate
+                          ? AppColors.textMuted.withValues(alpha: 0.15)
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(AppRadius.full),
+                      border: Border.all(
+                        color: noDate
+                            ? AppColors.textMuted
+                            : (context.isDark
+                                ? AppColors.borderDark
+                                : AppColors.border),
+                        width: noDate ? 1.5 : 1,
+                      ),
+                    ),
+                    child: Row(children: [
+                      Icon(Icons.event_busy_rounded,
+                          size: 11,
+                          color: noDate
+                              ? AppColors.textMuted
+                              : context.cTextMuted),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Sem data',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: noDate
+                              ? FontWeight.w600
+                              : FontWeight.w400,
+                          color: noDate
+                              ? AppColors.textMuted
                               : context.cTextMuted,
                         ),
                       ),
@@ -549,6 +606,12 @@ class _TasksHeader extends StatelessWidget {
                   label: 'Gantt',
                   active: currentView == 'gantt',
                   onTap: () => onViewChanged('gantt'),
+                ),
+                _ViewBtn(
+                  icon: Icons.table_chart_outlined,
+                  label: 'Tabela',
+                  active: currentView == 'table',
+                  onTap: () => onViewChanged('table'),
                 ),
               ],
             ),
@@ -1407,7 +1470,7 @@ class _CreateTaskSheetState extends ConsumerState<_CreateTaskSheet> {
     }
     setState(() { _loading = true; _error = null; });
 
-    final err = await ref.read(tasksProvider.notifier).createTask(
+    final result = await ref.read(tasksProvider.notifier).createTask(
       title: _ctrl.text,
       status: _status,
       priority: _priority,
@@ -1417,8 +1480,8 @@ class _CreateTaskSheetState extends ConsumerState<_CreateTaskSheet> {
 
     if (mounted) {
       setState(() => _loading = false);
-      if (err != null) {
-        setState(() => _error = err);
+      if (result.error != null) {
+        setState(() => _error = result.error);
       } else {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(

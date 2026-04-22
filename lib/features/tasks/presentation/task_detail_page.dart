@@ -9,6 +9,7 @@ import '../../auth/domain/data_providers.dart';
 import '../../auth/domain/auth_provider.dart';
 import 'edit_task_sheet.dart';
 import 'task_attachments_widget.dart';
+import 'widgets/task_5w2h_section.dart';
 
 // ── Providers locais ─────────────────────────────────────────
 
@@ -239,6 +240,10 @@ class _TaskDetailBody extends ConsumerWidget {
 
               // ── Labels / Etiquetas
               _LabelsSection(taskId: taskId),
+              const SizedBox(height: AppSpacing.sp32),
+
+              // ── 5W2H
+              Task5w2hSection(taskId: taskId),
               const SizedBox(height: AppSpacing.sp32),
 
               // ── Subtarefas
