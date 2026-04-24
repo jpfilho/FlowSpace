@@ -13,14 +13,16 @@ import 'edit_task_sheet.dart';
 import 'widgets/gantt_view.dart';
 import 'widgets/tasks_table_view.dart';
 
-final _viewProvider = StateProvider<String>((ref) => 'gantt'); // list | kanban | gantt
+final _viewProvider = StateProvider<String>((ref) => 'kanban'); // list | kanban | gantt
 
-// ── Filtros ───────────────────────────────────────────────────
-final _statusFilterProvider = StateProvider<String>((ref) => 'all');
+// ── Filtros (providers públicos podem ser controlados externamente, ex: dashboard) ──
+final taskStatusFilterProvider = StateProvider<String>((ref) => 'all');
+final taskOverdueFilterProvider = StateProvider<bool>((ref) => false);
 final _priorityFilterProvider = StateProvider<String>((ref) => 'all');
 final _dueTodayFilterProvider = StateProvider<bool>((ref) => false);
 final _noDateFilterProvider = StateProvider<bool>((ref) => false);
-final _projectFilterProvider = StateProvider<String?>((ref) => null);
+// Empty set = Todos; '__no_project__' = tasks with no project; other values = project IDs
+final _projectFilterProvider = StateProvider<Set<String>>((ref) => {});
 final _assigneeFilterProvider = StateProvider<String?>((ref) => null);
 
 class TasksPage extends ConsumerWidget {
@@ -60,19 +62,30 @@ class TasksPage extends ConsumerWidget {
           Expanded(
             child: tasksAsync.when(
               data: (tasks) {
-                final statusFilter = ref.watch(_statusFilterProvider);
+                final statusFilter = ref.watch(taskStatusFilterProvider);
+                final overdueOnly = ref.watch(taskOverdueFilterProvider);
                 final priorityFilter = ref.watch(_priorityFilterProvider);
                 final dueTodayOnly = ref.watch(_dueTodayFilterProvider);
                 final noDateOnly = ref.watch(_noDateFilterProvider);
-                final projectFilter = ref.watch(_projectFilterProvider);
+                final projectFilters = ref.watch(_projectFilterProvider);
                 final assigneeFilter = ref.watch(_assigneeFilterProvider);
                 final today = DateTime.now();
                 final todayDate = DateTime(today.year, today.month, today.day);
 
                 var filtered = tasks.where((t) {
-                  // Status filter
-                  if (statusFilter != 'all' && t.status != statusFilter) {
+                  // Status filter — usa effectiveStatus para tarefas recorrentes
+                  if (statusFilter != 'all' && t.effectiveStatus != statusFilter) {
                     return false;
+                  }
+                  // Overdue filter (vencidas e não concluídas)
+                  if (overdueOnly) {
+                    final now = DateTime.now();
+                    final todayDate = DateTime(now.year, now.month, now.day);
+                    if (t.dueDate == null ||
+                        !t.dueDate!.isBefore(todayDate) ||
+                        t.effectiveStatus == 'done') {
+                      return false;
+                    }
                   }
                   // Priority filter
                   if (priorityFilter != 'all' && t.priority != priorityFilter) {
@@ -87,9 +100,17 @@ class TasksPage extends ConsumerWidget {
                   }
                   // No date filter
                   if (noDateOnly && t.dueDate != null) return false;
-                  // Project filter
-                  if (projectFilter != null && t.projectId != projectFilter) {
-                    return false;
+                  // Project filter (multi-select)
+                  if (projectFilters.isNotEmpty) {
+                    final wantsNoProject = projectFilters.contains('__no_project__');
+                    final specificProjects = projectFilters
+                        .where((id) => id != '__no_project__')
+                        .toSet();
+                    if (t.projectId == null) {
+                      if (!wantsNoProject) return false;
+                    } else {
+                      if (!specificProjects.contains(t.projectId)) return false;
+                    }
                   }
                   // Assignee filter
                   if (assigneeFilter != null && t.assigneeId != assigneeFilter) {
@@ -142,11 +163,12 @@ class TasksPage extends ConsumerWidget {
 class _FilterBar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final currentStatus = ref.watch(_statusFilterProvider);
+    final currentStatus = ref.watch(taskStatusFilterProvider);
+    final overdueOnly = ref.watch(taskOverdueFilterProvider);
     final currentPriority = ref.watch(_priorityFilterProvider);
     final dueToday = ref.watch(_dueTodayFilterProvider);
     final noDate = ref.watch(_noDateFilterProvider);
-    final currentProject = ref.watch(_projectFilterProvider);
+    final projectFilters = ref.watch(_projectFilterProvider);
     final currentAssignee = ref.watch(_assigneeFilterProvider);
     final projects = ref.watch(projectsProvider).valueOrNull ?? [];
     final members = ref.watch(workspaceMembersProvider).valueOrNull ?? [];
@@ -155,7 +177,8 @@ class _FilterBar extends ConsumerWidget {
         currentPriority != 'all' ||
         dueToday ||
         noDate ||
-        currentProject != null ||
+        overdueOnly ||
+        projectFilters.isNotEmpty ||
         currentAssignee != null;
 
     const statusFilters = [
@@ -205,7 +228,7 @@ class _FilterBar extends ConsumerWidget {
                             right: AppSpacing.sp6, top: 9, bottom: 9),
                         child: GestureDetector(
                           onTap: () => ref
-                              .read(_statusFilterProvider.notifier)
+                              .read(taskStatusFilterProvider.notifier)
                               .state = value,
                           child: AnimatedContainer(
                             duration: AppAnimations.fast,
@@ -248,11 +271,12 @@ class _FilterBar extends ConsumerWidget {
                     message: 'Limpar filtros',
                     child: GestureDetector(
                       onTap: () {
-                        ref.read(_statusFilterProvider.notifier).state = 'all';
+                        ref.read(taskStatusFilterProvider.notifier).state = 'all';
+                        ref.read(taskOverdueFilterProvider.notifier).state = false;
                         ref.read(_priorityFilterProvider.notifier).state = 'all';
                         ref.read(_dueTodayFilterProvider.notifier).state = false;
                         ref.read(_noDateFilterProvider.notifier).state = false;
-                        ref.read(_projectFilterProvider.notifier).state = null;
+                        ref.read(_projectFilterProvider.notifier).state = {};
                         ref.read(_assigneeFilterProvider.notifier).state = null;
                       },
                       child: Padding(
@@ -469,13 +493,47 @@ class _FilterBar extends ConsumerWidget {
                   const SizedBox(width: 6),
                   Text('Projeto:', style: TextStyle(fontSize: 11, color: context.cTextMuted, fontWeight: FontWeight.w500)),
                   const SizedBox(width: 6),
-                  _FilterChip(label: 'Todos', active: currentProject == null, color: AppColors.primary, onTap: () => ref.read(_projectFilterProvider.notifier).state = null),
+                  // "Todos" chip — limpa a seleção
+                  _FilterChip(
+                    label: 'Todos',
+                    active: projectFilters.isEmpty,
+                    color: AppColors.primary,
+                    onTap: () => ref.read(_projectFilterProvider.notifier).state = {},
+                  ),
+                  // "Sem Projeto" chip
+                  _FilterChip(
+                    label: 'Sem Projeto',
+                    active: projectFilters.contains('__no_project__'),
+                    color: AppColors.textMuted,
+                    onTap: () {
+                      final current = Set<String>.from(ref.read(_projectFilterProvider));
+                      if (current.contains('__no_project__')) {
+                        current.remove('__no_project__');
+                      } else {
+                        current.add('__no_project__');
+                      }
+                      ref.read(_projectFilterProvider.notifier).state = current;
+                    },
+                  ),
+                  // Project chips (multi-select toggle)
                   ...projects.map((p) {
-                    final active = currentProject == p.id;
+                    final active = projectFilters.contains(p.id);
                     final chipColor = (p.color != null && p.color!.isNotEmpty)
                         ? _hexColor(p.color!) : AppColors.primary;
-                    return _FilterChip(label: p.name, active: active, color: chipColor,
-                      onTap: () => ref.read(_projectFilterProvider.notifier).state = active ? null : p.id);
+                    return _FilterChip(
+                      label: p.name,
+                      active: active,
+                      color: chipColor,
+                      onTap: () {
+                        final current = Set<String>.from(ref.read(_projectFilterProvider));
+                        if (active) {
+                          current.remove(p.id);
+                        } else {
+                          current.add(p.id);
+                        }
+                        ref.read(_projectFilterProvider.notifier).state = current;
+                      },
+                    );
                   }),
                   const SizedBox(width: 12),
                   Icon(Icons.person_outline_rounded, size: 13, color: context.cTextMuted),

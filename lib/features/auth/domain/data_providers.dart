@@ -88,6 +88,21 @@ class TaskData {
   bool get isDone => status == 'done';
   bool get isRecurring => recurrenceType != 'none';
 
+  /// Para tarefas recorrentes marcadas como 'done': se hoje chegou ou passou
+  /// a próxima data de vencimento, o status efetivo volta a 'todo'.
+  /// Isso garante que atividades de rotina reapareçam automaticamente.
+  String get effectiveStatus {
+    if (status != 'done' || !isRecurring || dueDate == null) return status;
+    final next = nextDueDate;
+    if (next == null) return status;
+    // Se a próxima ocorrência cai após o fim da série, mantém 'done'
+    if (recurrenceEndsAt != null && next.isAfter(recurrenceEndsAt!)) return status;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    // Se hoje chegou ou passou o próximo vencimento → tarefa está ativa novamente
+    return today.isBefore(next) ? status : 'todo';
+  }
+
   factory TaskData.fromJson(Map<String, dynamic> j) {
     DateTime? parseDateSafe(String? s) {
       if (s == null) return null;
@@ -217,9 +232,29 @@ class TasksNotifier extends AsyncNotifier<List<TaskData>> {
         .order('created_at', ascending: false)
         .limit(500);
 
-    return (data as List)
+    final tasks = (data as List)
         .map((e) => TaskData.fromJson(e as Map<String, dynamic>))
         .toList();
+
+    // ── Auto-reset de recorrências vencidas ────────────────────────────────
+    // Tarefas recorrentes concluídas cujo próximo vencimento já chegou
+    // são reativadas automaticamente: status volta a 'todo' e due_date avança.
+    final List<TaskData> result = [];
+    for (final t in tasks) {
+      if (t.effectiveStatus != t.status) {
+        final next = t.nextDueDate!;
+        // Atualiza o DB de forma assíncrona (sem bloquear o carregamento)
+        client.from('tasks').update({
+          'status': 'todo',
+          'due_date': next.toIso8601String(),
+          'updated_at': DateTime.now().toIso8601String(),
+        }).eq('id', t.id);
+        result.add(t.copyWith(status: 'todo', dueDate: next));
+      } else {
+        result.add(t);
+      }
+    }
+    return result;
   }
 
   Future<void> refresh() async {

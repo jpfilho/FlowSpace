@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../features/auth/domain/auth_provider.dart';
 import '../../features/auth/presentation/login_page.dart';
 import '../../features/auth/presentation/signup_page.dart';
 import '../../features/auth/presentation/forgot_password_page.dart';
+import '../../features/auth/domain/data_providers.dart';
 import '../../features/dashboard/presentation/dashboard_page.dart';
 import '../../features/tasks/presentation/tasks_page.dart';
 import '../../features/tasks/presentation/task_detail_page.dart';
@@ -22,6 +24,9 @@ import '../../features/members/presentation/members_page.dart';
 import '../../features/databases/presentation/databases_page.dart';
 import '../../features/databases/presentation/database_view_page.dart';
 import '../../features/invite/presentation/invite_page.dart';
+import '../../features/focus/presentation/focus_start_page.dart';
+import '../../features/focus/presentation/focus_flow_page.dart';
+import '../../features/focus/presentation/focus_completion_page.dart';
 import '../../shared/widgets/sidebar/app_shell.dart';
 import 'app_routes.dart';
 
@@ -82,7 +87,8 @@ final routerProvider = Provider<GoRouter>((ref) {
         routes: [
           GoRoute(
             path: AppRoutes.dashboard,
-            pageBuilder: (_, state) => _fadePage(const DashboardPage(), state),
+            pageBuilder: (_, state) =>
+                _fadePage(const _FocusGatewayPage(), state),
           ),
           GoRoute(
             path: AppRoutes.tasks,
@@ -162,6 +168,22 @@ final routerProvider = Provider<GoRouter>((ref) {
               ),
             ],
           ),
+          // ── Focus Start ───────────────────────────────────
+          GoRoute(
+            path: AppRoutes.focus,
+            pageBuilder: (_, state) =>
+                _fadePage(const FocusStartPage(), state),
+          ),
+          GoRoute(
+            path: AppRoutes.focusFlow,
+            pageBuilder: (_, state) =>
+                _fadePage(const FocusFlowPage(), state),
+          ),
+          GoRoute(
+            path: AppRoutes.focusComplete,
+            pageBuilder: (_, state) =>
+                _fadePage(const FocusCompletionPage(), state),
+          ),
         ],
       ),
     ],
@@ -184,3 +206,64 @@ CustomTransitionPage _fadePage(Widget child, GoRouterState state) {
     },
   );
 }
+
+// ─────────────────────────────────────────────────────────────
+// FOCUS GATEWAY
+// Wrapper do dashboard que verifica se o Focus Start deve ser
+// exibido antes de liberar o acesso ao dashboard principal.
+// ─────────────────────────────────────────────────────────────
+
+class _FocusGatewayPage extends ConsumerStatefulWidget {
+  const _FocusGatewayPage();
+
+  @override
+  ConsumerState<_FocusGatewayPage> createState() =>
+      _FocusGatewayPageState();
+}
+
+class _FocusGatewayPageState extends ConsumerState<_FocusGatewayPage> {
+  bool _checked = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkFocus());
+  }
+
+  Future<void> _checkFocus() async {
+    if (_checked || !mounted) return;
+    _checked = true;
+
+    // 1. Verifica se o focus já foi feito hoje
+    final prefs = await SharedPreferences.getInstance();
+    final now = DateTime.now();
+    final key = 'focus_done_${now.year}_${now.month}_${now.day}';
+    if (prefs.getBool(key) == true) return; // já fez hoje → dashboard normal
+
+    // 2. Aguarda as tarefas carregarem (com timeout)
+    final tasks = await ref.read(tasksProvider.future).timeout(
+          const Duration(seconds: 8),
+          onTimeout: () => [],
+        );
+
+    if (!mounted) return;
+
+    // 3. Verifica se há tarefas críticas
+    final today = DateTime(now.year, now.month, now.day);
+    final hasFocusTasks = tasks.any((t) {
+      final status = t.effectiveStatus;
+      if (status == 'done' || status == 'cancelled') return false;
+      if (t.dueDate == null) return false;
+      return t.dueDate!.isBefore(today) || t.dueDate! == today;
+    });
+
+    if (hasFocusTasks && mounted) {
+      context.go(AppRoutes.focus);
+    }
+    // Se não há tarefas críticas → permanece no dashboard
+  }
+
+  @override
+  Widget build(BuildContext context) => const DashboardPage();
+}
+

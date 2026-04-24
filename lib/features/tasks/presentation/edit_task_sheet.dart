@@ -25,6 +25,7 @@ class _EditTaskSheetState extends ConsumerState<EditTaskSheet> {
   late String _recurrenceType;
   late int _recurrenceInterval;
   DateTime? _recurrenceEndsAt;
+  bool _dueDateAutoSet = false; // true quando a data foi preenchida automaticamente pela recorrência
   bool _loading = false;
   String? _error;
 
@@ -60,6 +61,19 @@ class _EditTaskSheetState extends ConsumerState<EditTaskSheet> {
   void dispose() {
     _titleCtrl.dispose();
     super.dispose();
+  }
+
+  /// Calcula a próxima data de vencimento a partir de hoje com base no tipo e intervalo.
+  DateTime _computeFirstDueDate(String type, int interval) {
+    final today = DateTime.now();
+    final base = DateTime(today.year, today.month, today.day);
+    return switch (type) {
+      'daily'   => base.add(Duration(days: interval)),
+      'weekly'  => base.add(Duration(days: 7 * interval)),
+      'monthly' => DateTime(base.year, base.month + interval, base.day),
+      'yearly'  => DateTime(base.year + interval, base.month, base.day),
+      _         => base.add(const Duration(days: 1)),
+    };
   }
 
   Future<void> _save() async {
@@ -124,7 +138,12 @@ class _EditTaskSheetState extends ConsumerState<EditTaskSheet> {
         child: child!,
       ),
     );
-    if (picked != null) setState(() => _dueDate = picked);
+    if (picked != null) {
+      setState(() {
+        _dueDate = picked;
+        _dueDateAutoSet = false; // usuário definiu manualmente
+      });
+    }
   }
 
   @override
@@ -277,8 +296,11 @@ class _EditTaskSheetState extends ConsumerState<EditTaskSheet> {
                       ),
                     ),
                     if (_dueDate != null)
-                      GestureDetector(
-                        onTap: () => setState(() => _dueDate = null),
+                       GestureDetector(
+                        onTap: () => setState(() {
+                          _dueDate = null;
+                          _dueDateAutoSet = false;
+                        }),
                         child: const Icon(Icons.close_rounded,
                             size: 16, color: AppColors.primary),
                       ),
@@ -327,10 +349,30 @@ class _EditTaskSheetState extends ConsumerState<EditTaskSheet> {
               recurrenceType: _recurrenceType,
               recurrenceInterval: _recurrenceInterval,
               recurrenceEndsAt: _recurrenceEndsAt,
-              onTypeChanged: (v) =>
-                  setState(() => _recurrenceType = v),
-              onIntervalChanged: (v) =>
-                  setState(() => _recurrenceInterval = v),
+              onTypeChanged: (v) {
+                setState(() {
+                  _recurrenceType = v;
+                  // Auto-preenche a data se não houver data definida e uma recorrência foi escolhida
+                  if (v != 'none' && (_dueDate == null || _dueDateAutoSet)) {
+                    _dueDate = _computeFirstDueDate(v, _recurrenceInterval);
+                    _dueDateAutoSet = true;
+                  }
+                  // Remove a data auto-preenchida ao desativar recorrência
+                  if (v == 'none' && _dueDateAutoSet) {
+                    _dueDate = null;
+                    _dueDateAutoSet = false;
+                  }
+                });
+              },
+              onIntervalChanged: (v) {
+                setState(() {
+                  _recurrenceInterval = v;
+                  // Recalcula a data auto-definida quando o intervalo muda
+                  if (_dueDateAutoSet && _recurrenceType != 'none') {
+                    _dueDate = _computeFirstDueDate(_recurrenceType, v);
+                  }
+                });
+              },
               onEndsAtChanged: (v) =>
                   setState(() => _recurrenceEndsAt = v),
             ),

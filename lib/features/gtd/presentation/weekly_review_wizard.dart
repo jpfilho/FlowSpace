@@ -1,13 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
+
 import '../../../core/theme/index.dart';
+import '../../auth/domain/data_providers.dart';
+import '../../auth/domain/auth_provider.dart';
+import '../domain/weekly_review_providers.dart';
+import '../../tasks/presentation/edit_task_sheet.dart';
 
 // ─────────────────────────────────────────────────────────────
 // WEEKLY REVIEW WIZARD
 // ─────────────────────────────────────────────────────────────
 
-/// Opens the GTD Weekly Review wizard as a full-screen dialog.
 Future<void> showWeeklyReview(BuildContext context) {
   return showGeneralDialog(
     context: context,
@@ -23,146 +28,76 @@ Future<void> showWeeklyReview(BuildContext context) {
   );
 }
 
-// ─────────────────────────────────────────────────────────────
-// Step data
-// ─────────────────────────────────────────────────────────────
-
 class _ReviewStep {
   final String title;
   final String description;
   final IconData icon;
   final Color color;
-  final List<String> checklist;
 
   const _ReviewStep({
     required this.title,
     required this.description,
     required this.icon,
     required this.color,
-    required this.checklist,
   });
 }
 
 const _reviewSteps = [
   _ReviewStep(
-    title: 'Esvaziar a Cabeça',
-    description:
-        'Capture tudo que está na sua mente. Qualquer ideia, preocupação ou tarefa pendente.',
+    title: 'Coletar e Esvaziar',
+    description: 'Capture tudo que está na mente para não esquecer nada.',
     icon: Icons.psychology_outlined,
     color: AppColors.primary,
-    checklist: [
-      'Anote tudo que está incomodando ou preocupando',
-      'Revise anotações físicas (cadernos, post-its)',
-      'Verifique galeria de fotos por capturas úteis',
-      'Esvazie a sua bolsa/mochila de papéis',
-    ],
   ),
   _ReviewStep(
-    title: 'Processar o Inbox',
-    description:
-        'Decida o que fazer com cada item capturado. Nada fica no inbox — cada coisa tem um destino.',
+    title: 'Processar Inbox',
+    description: 'Transforme capturas em tarefas, projetos ou descarte.',
     icon: Icons.inbox_rounded,
     color: AppColors.accent,
-    checklist: [
-      'Processe todos os items do Inbox GTD',
-      'Revise email e mensagens não lidas',
-      'Processe inbox do sistema (abas, downloads)',
-      'Cada item: fazer, delegar, adiar ou descartar',
-    ],
+  ),
+  _ReviewStep(
+    title: 'Revisar Tarefas',
+    description: 'Atenção às tarefas atrasadas ou sem prazo.',
+    icon: Icons.task_alt_rounded,
+    color: AppColors.warning,
   ),
   _ReviewStep(
     title: 'Revisar Projetos',
-    description:
-        'Cada projeto deve ter pelo menos uma próxima ação definida. Projetos sem ação ficam travados.',
+    description: 'Garanta que projetos ativos tenham próximas ações.',
     icon: Icons.folder_outlined,
     color: AppColors.success,
-    checklist: [
-      'Revise cada projeto ativo',
-      'Garanta que cada projeto tem próxima ação',
-      'Encerre projetos concluídos',
-      'Adicione novos projetos identificados',
-    ],
   ),
   _ReviewStep(
-    title: 'Revisar Listas de Ação',
-    description:
-        'Suas listas refletem o que você pode realmente fazer. Remova o que ficou obsoleto.',
-    icon: Icons.checklist_rounded,
-    color: AppColors.warning,
-    checklist: [
-      'Revise tarefas "Em progresso" – ainda relevantes?',
-      'Revise tarefas "Aguardando" – cobrar de alguém?',
-      'Revise "Algum dia/Talvez" – promover algo?',
-      'Marque como concluído o que já foi feito',
-    ],
-  ),
-  _ReviewStep(
-    title: 'Olhar o Calendário',
-    description:
-        'O calendário é a sua realidade imutável. Garanta que você está preparado para o futuro próximo.',
-    icon: Icons.calendar_month_rounded,
+    title: 'Aguardando Resposta',
+    description: 'Cobre pendências com terceiros ou tarefas delegadas.',
+    icon: Icons.hourglass_empty_rounded,
     color: Color(0xFF8B5CF6),
-    checklist: [
-      'Revise últimos 7 dias – algo esquecido?',
-      'Revise próximos 14 dias – alguma preparação?',
-      'Bloqueie tempo para projetos prioritários',
-      'Confirme compromissos da próxima semana',
-    ],
   ),
   _ReviewStep(
-    title: 'Revisar Metas e Visão',
-    description:
-        'Alinhe seu dia a dia com suas metas de mais alto nível. O GTD funciona em 6 altitudes.',
+    title: 'Olhar Calendário',
+    description: 'Revise os eventos passados e futuros importantes.',
+    icon: Icons.calendar_month_rounded,
+    color: Color(0xFFF59E0B),
+  ),
+  _ReviewStep(
+    title: 'Fechamento',
+    description: 'Defina o seu foco para a semana e conclua a revisão.',
     icon: Icons.rocket_launch_rounded,
     color: Color(0xFFEC4899),
-    checklist: [
-      'Revise suas metas de curto prazo (1–3 meses)',
-      'Revise áreas de responsabilidade da sua vida',
-      'Suas ações de hoje estão alinhadas com seus objetivos?',
-      'Existe algo importante que você está adiando?',
-    ],
   ),
 ];
 
-// ─────────────────────────────────────────────────────────────
-// Dialog
-// ─────────────────────────────────────────────────────────────
-
 class _WeeklyReviewDialog extends ConsumerStatefulWidget {
   const _WeeklyReviewDialog();
-
   @override
-  ConsumerState<_WeeklyReviewDialog> createState() =>
-      _WeeklyReviewDialogState();
+  ConsumerState<_WeeklyReviewDialog> createState() => _WeeklyReviewDialogState();
 }
 
-class _WeeklyReviewDialogState
-    extends ConsumerState<_WeeklyReviewDialog> {
+class _WeeklyReviewDialogState extends ConsumerState<_WeeklyReviewDialog> {
   int _currentStep = 0;
-  // checked[stepIndex][checkIndex]
-  final Map<int, Set<int>> _checked = {};
 
   bool get _isLastStep => _currentStep == _reviewSteps.length - 1;
-
-  double get _progress =>
-      (_currentStep + 1) / _reviewSteps.length;
-
-  int get _totalChecked =>
-      _checked.values.fold(0, (sum, s) => sum + s.length);
-
-  int get _totalItems =>
-      _reviewSteps.fold(0, (s, step) => s + step.checklist.length);
-
-  void _toggle(int step, int item) {
-    setState(() {
-      _checked.putIfAbsent(step, () => {});
-      if (_checked[step]!.contains(item)) {
-        _checked[step]!.remove(item);
-      } else {
-        _checked[step]!.add(item);
-      }
-    });
-  }
+  double get _progress => (_currentStep + 1) / _reviewSteps.length;
 
   void _next() {
     if (_isLastStep) {
@@ -176,17 +111,17 @@ class _WeeklyReviewDialogState
     if (_currentStep > 0) setState(() => _currentStep--);
   }
 
-  void _finish() {
+  Future<void> _finish() async {
+    await ref.read(weeklyReviewSessionProvider.notifier).completeSession();
+    if (!mounted) return;
     Navigator.of(context).pop();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
-          children: [
-            const Icon(Icons.celebration_rounded,
-                color: Colors.white, size: 20),
-            const SizedBox(width: 8),
-            Text(
-                'Revisão semanal concluída! $_totalChecked/$_totalItems itens ✓'),
+          children: const [
+            Icon(Icons.celebration_rounded, color: Colors.white, size: 20),
+            SizedBox(width: 8),
+            Text('Revisão semanal concluída com sucesso!'),
           ],
         ),
         backgroundColor: AppColors.success,
@@ -206,22 +141,19 @@ class _WeeklyReviewDialogState
         children: [
           // Backdrop
           GestureDetector(
-            onTap: () => _showExitDialog(),
+            onTap: _showExitDialog,
             child: Container(color: Colors.black.withValues(alpha: 0.6)),
           ),
 
-          // Card
+          // Card Flow Responsivo
           Center(
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 580),
+              constraints: const BoxConstraints(maxWidth: 800, maxHeight: 850),
               child: Padding(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 20, vertical: 40),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 30),
                 child: Container(
                   decoration: BoxDecoration(
-                    color: isDark
-                        ? AppColors.surfaceDark
-                        : AppColors.surface,
+                    color: isDark ? AppColors.surfaceDark : AppColors.surface,
                     borderRadius: BorderRadius.circular(AppRadius.xl),
                     boxShadow: [
                       BoxShadow(
@@ -232,41 +164,132 @@ class _WeeklyReviewDialogState
                     ],
                   ),
                   child: Column(
-                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      // ── Top bar ────────────────────────────
-                      _TopBar(
-                        step: _currentStep,
-                        total: _reviewSteps.length,
-                        progress: _progress,
-                        stepColor: step.color,
-                        onClose: _showExitDialog,
+                      // Header
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(28, 24, 20, 16),
+                        child: Column(
+                          children: [
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: step.color.withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(AppRadius.full),
+                                  ),
+                                  child: Text(
+                                    'Etapa ${_currentStep + 1} de ${_reviewSteps.length}',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: step.color,
+                                    ),
+                                  ),
+                                ),
+                                const Spacer(),
+                                IconButton(
+                                  onPressed: _showExitDialog,
+                                  icon: const Icon(Icons.close_rounded),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(4),
+                              child: LinearProgressIndicator(
+                                value: _progress,
+                                minHeight: 4,
+                                backgroundColor: step.color.withValues(alpha: 0.12),
+                                valueColor: AlwaysStoppedAnimation(step.color),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-
-                      // ── Step content ───────────────────────
-                      Flexible(
-                        child: SingleChildScrollView(
-                          padding: const EdgeInsets.fromLTRB(28, 4, 28, 4),
-                          child: _StepContent(
-                            key: ValueKey(_currentStep),
-                            step: step,
-                            stepIndex: _currentStep,
-                            checked: _checked[_currentStep] ?? {},
-                            onToggle: (i) => _toggle(_currentStep, i),
+                      
+                      // Body dinâmico das 7 etapas
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 28),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Container(
+                                    width: 48,
+                                    height: 48,
+                                    decoration: BoxDecoration(
+                                      color: step.color.withValues(alpha: 0.12),
+                                      borderRadius: BorderRadius.circular(AppRadius.lg),
+                                    ),
+                                    child: Icon(step.icon, color: step.color, size: 24),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: Text(
+                                      step.title,
+                                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ).animate().fadeIn(duration: 300.ms).slideX(begin: 0.05, duration: 300.ms),
+                              const SizedBox(height: 12),
+                              Text(
+                                step.description,
+                                style: context.bodySm.copyWith(color: context.cTextMuted, height: 1.5),
+                              ).animate().fadeIn(delay: 60.ms, duration: 300.ms),
+                              const SizedBox(height: 20),
+                              
+                              // Injeção da View específica
+                              Expanded(
+                                child: _buildStepView(_currentStep),
+                              ),
+                            ],
                           ),
                         ),
                       ),
 
-                      // ── Bottom nav ─────────────────────────
-                      _BottomNav(
-                        currentStep: _currentStep,
-                        totalSteps: _reviewSteps.length,
-                        stepColor: step.color,
-                        totalChecked: _totalChecked,
-                        totalItems: _totalItems,
-                        onPrev: _prev,
-                        onNext: _next,
-                        isLast: _isLastStep,
+                      // Footer Navigation
+                      Container(
+                        padding: const EdgeInsets.fromLTRB(28, 16, 28, 24),
+                        decoration: BoxDecoration(
+                          border: Border(
+                            top: BorderSide(
+                              color: isDark ? AppColors.borderDark : AppColors.border,
+                            ),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            if (_currentStep > 0)
+                              OutlinedButton(
+                                onPressed: _prev,
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                                ),
+                                child: const Text('Voltar'),
+                              )
+                            else
+                              const SizedBox.shrink(),
+                            FilledButton.icon(
+                              onPressed: _next,
+                              icon: Icon(
+                                _isLastStep ? Icons.celebration_rounded : Icons.arrow_forward_rounded,
+                                size: 16,
+                              ),
+                              label: Text(_isLastStep ? 'Concluir Revisão!' : 'Próximo'),
+                              style: FilledButton.styleFrom(
+                                backgroundColor: step.color,
+                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
@@ -279,13 +302,25 @@ class _WeeklyReviewDialogState
     );
   }
 
+  Widget _buildStepView(int stepIndex) {
+    return switch (stepIndex) {
+      0 => const _StepCapture(),
+      1 => const _StepInbox(),
+      2 => const _StepTasks(),
+      3 => const _StepProjects(),
+      4 => const _StepWaiting(),
+      5 => const _StepCalendar(),
+      6 => const _StepClosing(),
+      _ => const SizedBox.shrink(),
+    };
+  }
+
   void _showExitDialog() {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Sair da revisão?'),
-        content: const Text(
-            'Seu progresso não será salvo. Deseja sair mesmo assim?'),
+        content: const Text('Seu progresso da sessão atual não será computado. Sair?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
@@ -293,11 +328,10 @@ class _WeeklyReviewDialogState
           ),
           TextButton(
             onPressed: () {
-              Navigator.of(ctx).pop();
-              Navigator.of(context).pop();
+              Navigator.of(ctx).pop(); // dialog
+              Navigator.of(context).pop(); // modal
             },
-            child: Text('Sair',
-                style: TextStyle(color: AppColors.error)),
+            child: Text('Sair', style: TextStyle(color: AppColors.error)),
           ),
         ],
       ),
@@ -306,301 +340,493 @@ class _WeeklyReviewDialogState
 }
 
 // ─────────────────────────────────────────────────────────────
-// Top Bar
+// ETAPAS OPERACIONAIS
 // ─────────────────────────────────────────────────────────────
 
-class _TopBar extends StatelessWidget {
-  final int step;
-  final int total;
-  final double progress;
-  final Color stepColor;
-  final VoidCallback onClose;
-
-  const _TopBar({
-    required this.step,
-    required this.total,
-    required this.progress,
-    required this.stepColor,
-    required this.onClose,
-  });
-
+class _StepCapture extends ConsumerStatefulWidget {
+  const _StepCapture();
   @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding:
-          const EdgeInsets.fromLTRB(28, 24, 20, 16),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: stepColor.withValues(alpha: 0.12),
-                  borderRadius:
-                      BorderRadius.circular(AppRadius.full),
-                ),
-                child: Text(
-                  'Etapa ${step + 1} de $total',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: stepColor,
-                  ),
-                ),
-              ),
-              const Spacer(),
-              IconButton(
-                onPressed: onClose,
-                icon: const Icon(Icons.close_rounded),
-                color: AppColors.textMuted,
-                padding: EdgeInsets.zero,
-                constraints:
-                    const BoxConstraints(minWidth: 32, minHeight: 32),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: progress,
-              minHeight: 4,
-              backgroundColor:
-                  stepColor.withValues(alpha: 0.12),
-              valueColor: AlwaysStoppedAnimation(stepColor),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  ConsumerState<_StepCapture> createState() => _StepCaptureState();
 }
 
-// ─────────────────────────────────────────────────────────────
-// Step Content
-// ─────────────────────────────────────────────────────────────
+class _StepCaptureState extends ConsumerState<_StepCapture> {
+  final _ctrl = TextEditingController();
+  bool _isLoading = false;
 
-class _StepContent extends StatelessWidget {
-  final _ReviewStep step;
-  final int stepIndex;
-  final Set<int> checked;
-  final ValueChanged<int> onToggle;
-
-  const _StepContent({
-    super.key,
-    required this.step,
-    required this.stepIndex,
-    required this.checked,
-    required this.onToggle,
-  });
+  Future<void> _add() async {
+    final text = _ctrl.text.trim();
+    if (text.isEmpty) return;
+    setState(() => _isLoading = true);
+    final err = await ref.read(gtdInboxProvider.notifier).capture(text);
+    setState(() => _isLoading = false);
+    if (err == null) {
+      _ctrl.clear();
+      if (mounted) FocusScope.of(context).unfocus();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Icon + title
         Row(
           children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: step.color.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(AppRadius.lg),
-              ),
-              child: Icon(step.icon, color: step.color, size: 24),
-            ),
-            const SizedBox(width: 16),
             Expanded(
-              child: Text(
-                step.title,
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
+              child: TextField(
+                controller: _ctrl,
+                decoration: const InputDecoration(
+                  hintText: 'Digite o que está na sua cabeça...',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.flash_on_rounded),
+                ),
+                onSubmitted: (_) => _add(),
               ),
+            ),
+            const SizedBox(width: 8),
+            FilledButton(
+              onPressed: _isLoading ? null : _add,
+              child: _isLoading 
+                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                : const Text('Capturar'),
             ),
           ],
-        )
-            .animate()
-            .fadeIn(duration: 300.ms)
-            .slideX(begin: 0.05, duration: 300.ms),
-
-        const SizedBox(height: 12),
-
-        Text(
-          step.description,
-          style: context.bodySm.copyWith(
-              color: context.cTextMuted, height: 1.5),
-        )
-            .animate()
-            .fadeIn(delay: 60.ms, duration: 300.ms),
-
-        const SizedBox(height: 20),
-
-        // Checklist
-        ...step.checklist.asMap().entries.map((e) {
-          final i = e.key;
-          final item = e.value;
-          final done = checked.contains(i);
-          return GestureDetector(
-            onTap: () => onToggle(i),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              margin: const EdgeInsets.only(bottom: 8),
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 14, vertical: 12),
-              decoration: BoxDecoration(
-                color: done
-                    ? step.color.withValues(alpha: 0.06)
-                    : (context.isDark
-                        ? AppColors.surfaceVariantDark
-                        : AppColors.surfaceVariant),
-                borderRadius: BorderRadius.circular(AppRadius.md),
-                border: Border.all(
-                  color: done
-                      ? step.color.withValues(alpha: 0.3)
-                      : Colors.transparent,
-                ),
-              ),
-              child: Row(
-                children: [
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    width: 22,
-                    height: 22,
-                    decoration: BoxDecoration(
-                      color:
-                          done ? step.color : Colors.transparent,
-                      borderRadius:
-                          BorderRadius.circular(AppRadius.sm),
-                      border: Border.all(
-                        color: done
-                            ? step.color
-                            : context.isDark
-                                ? AppColors.borderDark
-                                : AppColors.border,
-                        width: 1.5,
-                      ),
-                    ),
-                    child: done
-                        ? const Icon(Icons.check_rounded,
-                            size: 14, color: Colors.white)
-                        : null,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      item,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: done
-                            ? context.cTextMuted
-                            : context.cTextPrimary,
-                        decoration: done
-                            ? TextDecoration.lineThrough
-                            : null,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            )
-                .animate()
-                .fadeIn(
-                    delay: Duration(milliseconds: 80 + i * 50),
-                    duration: 250.ms)
-                .slideX(
-                    begin: 0.03,
-                    delay: Duration(milliseconds: 80 + i * 50),
-                    duration: 250.ms),
-          );
-        }),
-
+        ),
+        const SizedBox(height: 24),
+        Text('No Inbox agora:', style: Theme.of(context).textTheme.titleSmall),
         const SizedBox(height: 8),
+        Expanded(
+          child: Consumer(builder: (ctx, ref, child) {
+            final inboxState = ref.watch(gtdInboxProvider);
+            return inboxState.when(
+              data: (items) {
+                if (items.isEmpty) {
+                  return const Center(child: Text('Inbox limpo! Ótimo.'));
+                }
+                return ListView.builder(
+                  itemCount: items.length,
+                  itemBuilder: (_, i) => ListTile(
+                    leading: const Icon(Icons.circle, size: 12),
+                    title: Text(items[i].content),
+                    dense: true,
+                  ),
+                );
+              },
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (e, st) => Text('Erro: $e'),
+            );
+          }),
+        ),
       ],
     );
   }
 }
 
-// ─────────────────────────────────────────────────────────────
-// Bottom Nav
-// ─────────────────────────────────────────────────────────────
+class _StepInbox extends ConsumerWidget {
+  const _StepInbox();
 
-class _BottomNav extends StatelessWidget {
-  final int currentStep;
-  final int totalSteps;
-  final Color stepColor;
-  final int totalChecked;
-  final int totalItems;
-  final VoidCallback onPrev;
-  final VoidCallback onNext;
-  final bool isLast;
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final inboxState = ref.watch(gtdInboxProvider);
+    
+    return inboxState.when(
+      data: (items) {
+        if (items.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.inbox_outlined, size: 48, color: Colors.grey),
+                const SizedBox(height: 16),
+                Text('Seu Inbox está completamente zerado.', style: Theme.of(context).textTheme.titleMedium),
+              ],
+            ),
+          );
+        }
+        return ListView.separated(
+          itemCount: items.length,
+          separatorBuilder: (_, __) => const SizedBox(height: 8),
+          itemBuilder: (_, i) {
+            final item = items[i];
+            return Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: context.isDark ? AppColors.surfaceVariantDark : AppColors.surfaceVariant,
+                borderRadius: BorderRadius.circular(AppRadius.md),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(item.content, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      ElevatedButton.icon(
+                        icon: const Icon(Icons.task_alt, size: 16),
+                        label: const Text('Para Tarefa'),
+                        onPressed: () => _openCreateTask(context, item.content, ref, item.id),
+                      ),
+                      const SizedBox(width: 8),
+                      TextButton.icon(
+                        icon: const Icon(Icons.delete_outline, size: 16),
+                        label: const Text('Descartar', style: TextStyle(color: Colors.red)),
+                        onPressed: () async {
+                          await ref.read(gtdInboxProvider.notifier).markProcessed(item.id);
+                          ref.read(weeklyReviewSessionProvider.notifier).incrementInboxProcessed();
+                        },
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, st) => Text('Erro: $e'),
+    );
+  }
 
-  const _BottomNav({
-    required this.currentStep,
-    required this.totalSteps,
-    required this.stepColor,
-    required this.totalChecked,
-    required this.totalItems,
-    required this.onPrev,
-    required this.onNext,
-    required this.isLast,
-  });
+  Future<void> _openCreateTask(BuildContext context, String content, WidgetRef ref, String itemId) async {
+    final nav = Navigator.of(context);
+    
+    // Mark as processed
+    await ref.read(gtdInboxProvider.notifier).markProcessed(itemId);
+    ref.read(weeklyReviewSessionProvider.notifier).incrementInboxProcessed();
+    
+    // Create task behind the scenes
+    final result = await ref.read(tasksProvider.notifier).createTask(title: content);
+    if (result.error != null) return;
+    
+    // Find task and open modal
+    final tasks = ref.read(tasksProvider).valueOrNull ?? [];
+    final newTask = tasks.where((t) => t.id == result.id).firstOrNull;
+    if (newTask != null) {
+      showModalBottomSheet(
+        context: nav.context,
+        isScrollControlled: true,
+        builder: (ctx) => EditTaskSheet(task: newTask),
+      );
+    }
+  }
+}
+
+class _StepTasks extends ConsumerWidget {
+  const _StepTasks();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tasksState = ref.watch(tasksProvider);
+    
+    return tasksState.when(
+      data: (allTasks) {
+        final now = DateTime.now();
+        final criticalTasks = allTasks.where((t) {
+          if (t.isDone) return false;
+          if (t.dueDate == null) return true; // sem data
+          final bool overdue = t.dueDate!.isBefore(DateTime(now.year, now.month, now.day));
+          return overdue;
+        }).toList();
+
+        if (criticalTasks.isEmpty) {
+          return const Center(child: Text('Nenhuma tarefa crítica pendente.'));
+        }
+
+        return ListView.builder(
+          itemCount: criticalTasks.length,
+          itemBuilder: (_, i) {
+            final t = criticalTasks[i];
+            final overdue = t.dueDate?.isBefore(DateTime(now.year, now.month, now.day)) ?? false;
+            
+            return Card(
+              margin: const EdgeInsets.only(bottom: 8),
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                side: BorderSide(color: overdue ? Colors.red.withOpacity(0.3) : Colors.grey.withOpacity(0.2)),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: ListTile(
+                title: Text(t.title, style: TextStyle(fontWeight: FontWeight.w500)),
+                subtitle: Text(
+                  t.dueDate == null 
+                     ? 'Sem data de entrega' 
+                     : 'Atrasada: ${DateFormat('dd/MM').format(t.dueDate!)}',
+                  style: TextStyle(color: overdue ? Colors.red[400] : Colors.grey),
+                ),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.edit_calendar_rounded, size: 20),
+                      onPressed: () {
+                         showModalBottomSheet(
+                           context: context,
+                           isScrollControlled: true,
+                           builder: (ctx) => EditTaskSheet(task: t),
+                         );
+                         ref.read(weeklyReviewSessionProvider.notifier).incrementTasksReviewed();
+                      },
+                      tooltip: 'Editar/Adiar',
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.check_circle_outline, size: 20),
+                      onPressed: () async {
+                         await ref.read(tasksProvider.notifier).updateStatus(t.id, 'done');
+                         ref.read(weeklyReviewSessionProvider.notifier).incrementTasksReviewed();
+                      },
+                      tooltip: 'Concluir agora',
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => Text('Erro: $e'),
+    );
+  }
+}
+
+class _StepProjects extends ConsumerWidget {
+  const _StepProjects();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final projectsAsync = ref.watch(projectsProvider);
+    final tasksAsync = ref.watch(tasksProvider);
+
+    if (projectsAsync.isLoading || tasksAsync.isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    final projects = projectsAsync.valueOrNull ?? [];
+    final tasks = tasksAsync.valueOrNull ?? [];
+
+    final activeProjects = projects.where((p) => p.status == 'active').toList();
+    
+    // Projetos sem proxima acao (sem task pendente)
+    final projectsWithoutAction = activeProjects.where((p) {
+      final projectTasks = tasks.where((t) => t.projectId == p.id && !t.isDone);
+      return projectTasks.isEmpty;
+    }).toList();
+
+    if (projectsWithoutAction.isEmpty) {
+      return const Center(child: Text('Todos os projetos ativos têm próximas ações!'));
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.red.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.warning_amber_rounded, color: Colors.red),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Atenção! Pela regra do GTD, projetos sem tarefas ativas ficam travados. Adicione tarefas para destravá-los.',
+                  style: TextStyle(color: Colors.red[800]),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        Expanded(
+          child: ListView.builder(
+            itemCount: projectsWithoutAction.length,
+            itemBuilder: (_, i) {
+              final p = projectsWithoutAction[i];
+              return Card(
+                elevation: 0,
+                color: context.isDark ? AppColors.surfaceVariantDark : AppColors.surfaceVariant,
+                margin: const EdgeInsets.only(bottom: 8),
+                child: ListTile(
+                  title: Text(p.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Text(p.description ?? 'Sem descrição'),
+                  trailing: ElevatedButton.icon(
+                    icon: const Icon(Icons.add_task, size: 16),
+                    label: const Text('Criar Ação'),
+                    onPressed: () async {
+                      final result = await ref.read(tasksProvider.notifier).createTask(title: 'Nova Tarefa', projectId: p.id);
+                      if (result.error == null) {
+                        final tasks = ref.read(tasksProvider).valueOrNull ?? [];
+                        final newTask = tasks.where((t) => t.id == result.id).firstOrNull;
+                        if (newTask != null && context.mounted) {
+                          showModalBottomSheet(
+                            context: context,
+                            isScrollControlled: true,
+                            builder: (ctx) => EditTaskSheet(task: newTask),
+                          );
+                          ref.read(weeklyReviewSessionProvider.notifier).incrementProjectsReviewed();
+                        }
+                      }
+                    },
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _StepWaiting extends ConsumerWidget {
+  const _StepWaiting();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tasksAsync = ref.watch(tasksProvider);
+    final userAsync = ref.watch(currentUserProvider);
+
+    return tasksAsync.when(
+      data: (tasks) {
+        final waitingTasks = tasks.where((t) {
+          if (t.isDone) return false;
+          // Está em review ou designado para outra pessoa (alguem da equipe)
+          return t.status == 'review' || (t.assigneeId != null && t.assigneeId != userAsync?.id);
+        }).toList();
+
+        if (waitingTasks.isEmpty) {
+          return const Center(child: Text('Nenhuma pendência aguardando terceiros.'));
+        }
+
+        return ListView.builder(
+          itemCount: waitingTasks.length,
+          itemBuilder: (_, i) {
+            final t = waitingTasks[i];
+            return ListTile(
+              leading: const Icon(Icons.supervisor_account_rounded),
+              title: Text(t.title),
+              subtitle: Text(t.status == 'review' ? 'Em revisão' : 'Delegada a um colega'),
+              trailing: IconButton(
+                icon: const Icon(Icons.call_made_rounded, size: 20),
+                tooltip: 'Abrir Tarefa',
+                onPressed: () {
+                  showModalBottomSheet(
+                    context: context,
+                    isScrollControlled: true,
+                    builder: (ctx) => EditTaskSheet(task: t),
+                  );
+                },
+              ),
+            );
+          },
+        );
+      },
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => Text('Erro: $e'),
+    );
+  }
+}
+
+class _StepCalendar extends StatelessWidget {
+  const _StepCalendar();
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(28, 16, 28, 24),
-      decoration: BoxDecoration(
-        border: Border(
-          top: BorderSide(
-            color: context.isDark
-                ? AppColors.borderDark
-                : AppColors.border,
-          ),
-        ),
-      ),
-      child: Row(
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // Progress counter
+          Icon(Icons.event_note_rounded, size: 64, color: AppColors.textMuted.withOpacity(0.3)),
+          const SizedBox(height: 16),
           Text(
-            '$totalChecked / $totalItems itens',
-            style: TextStyle(
-              fontSize: 12,
-              color: context.cTextMuted,
-            ),
+            'Revisão de Agenda (Mock)',
+            style: Theme.of(context).textTheme.titleLarge,
           ),
-          const Spacer(),
-          if (currentStep > 0)
-            OutlinedButton(
-              onPressed: onPrev,
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 20, vertical: 12),
-              ),
-              child: const Text('Voltar'),
-            ),
-          const SizedBox(width: 12),
-          FilledButton.icon(
-            onPressed: onNext,
-            icon: Icon(
-              isLast
-                  ? Icons.celebration_rounded
-                  : Icons.arrow_forward_rounded,
-              size: 16,
-            ),
-            label: Text(isLast ? 'Concluir Revisão!' : 'Próximo'),
-            style: FilledButton.styleFrom(
-              backgroundColor: stepColor,
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 20, vertical: 12),
-            ),
+          const SizedBox(height: 8),
+          const Text(
+            'Integração futura com Microsoft 365 / Outlook para carregar\neventos automáticos e extrair pendências.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.grey),
+          ),
+          const SizedBox(height: 24),
+          OutlinedButton.icon(
+            icon: const Icon(Icons.check_circle_outline),
+            label: const Text('Agenda Revisada Manualmente'),
+            onPressed: () {}, // Noop
           ),
         ],
       ),
+    );
+  }
+}
+
+class _StepClosing extends ConsumerWidget {
+  const _StepClosing();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final session = ref.watch(weeklyReviewSessionProvider);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const Icon(Icons.done_all_rounded, size: 60, color: Colors.green),
+        const SizedBox(height: 16),
+        Text(
+          'Ótimo progresso!',
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.headlineSmall,
+        ),
+        const SizedBox(height: 24),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: context.isDark ? AppColors.surfaceVariantDark : AppColors.surfaceVariant,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _Stat(label: 'Inbox Processado', value: session.inboxProcessedCount.toString(), color: AppColors.accent),
+              _Stat(label: 'Tarefas Atuadas', value: session.tasksReviewedCount.toString(), color: AppColors.warning),
+              _Stat(label: 'Projetos Revisados', value: session.projectsReviewedCount.toString(), color: AppColors.success),
+            ],
+          ),
+        ),
+        const SizedBox(height: 24),
+        TextField(
+          maxLines: 3,
+          onChanged: (val) => ref.read(weeklyReviewSessionProvider.notifier).setWeeklyFocus(val),
+          decoration: const InputDecoration(
+            labelText: 'Qual o SEU FOCO absoluto para essa nova semana?',
+            hintText: 'Escreva de 1 a 3 prioridades essenciais...',
+            border: OutlineInputBorder(),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _Stat extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+
+  const _Stat({required this.label, required this.value, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Text(value, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: color)),
+        const SizedBox(height: 4),
+        Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+      ],
     );
   }
 }

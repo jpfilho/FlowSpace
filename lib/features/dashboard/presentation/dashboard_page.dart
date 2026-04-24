@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../core/theme/index.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../features/auth/domain/auth_provider.dart';
 import '../../../features/auth/domain/data_providers.dart';
+import '../../../features/tasks/presentation/tasks_page.dart'
+    show taskStatusFilterProvider, taskOverdueFilterProvider;
 import '../../../shared/widgets/common/skeleton.dart';
 import 'widgets/stat_card.dart';
 import 'widgets/today_tasks_widget.dart';
@@ -235,6 +238,13 @@ class _StatsRow extends ConsumerWidget {
 
     return statsAsync.when(
       data: (stats) {
+        /// Reseta filtros anteriores, aplica o filtro do card e navega.
+        void goToTasks({String status = 'all', bool overdue = false}) {
+          ref.read(taskStatusFilterProvider.notifier).state = status;
+          ref.read(taskOverdueFilterProvider.notifier).state = overdue;
+          context.go('/tasks');
+        }
+
         final statList = [
           _StatData(
             label: 'Total de tarefas',
@@ -243,6 +253,7 @@ class _StatsRow extends ConsumerWidget {
             color: AppColors.primary,
             trend: 'No workspace',
             trendUp: null,
+            onTap: () => goToTasks(),
           ),
           _StatData(
             label: 'Concluídas',
@@ -251,6 +262,7 @@ class _StatsRow extends ConsumerWidget {
             color: AppColors.success,
             trend: stats.completed > 0 ? '${stats.completed} feitas' : 'Nenhuma ainda',
             trendUp: stats.completed > 0 ? true : null,
+            onTap: () => goToTasks(status: 'done'),
           ),
           _StatData(
             label: 'Em progresso',
@@ -259,6 +271,7 @@ class _StatsRow extends ConsumerWidget {
             color: AppColors.warning,
             trend: stats.inProgress > 0 ? 'Em andamento' : 'Tudo parado',
             trendUp: null,
+            onTap: () => goToTasks(status: 'in_progress'),
           ),
           _StatData(
             label: 'Atrasadas',
@@ -267,6 +280,7 @@ class _StatsRow extends ConsumerWidget {
             color: AppColors.error,
             trend: stats.overdue == 0 ? 'Em dia ✓' : '${stats.overdue} vencida${stats.overdue > 1 ? "s" : ""}',
             trendUp: stats.overdue == 0 ? true : false,
+            onTap: stats.overdue > 0 ? () => goToTasks(overdue: true) : null,
           ),
         ];
 
@@ -287,6 +301,7 @@ class _StatsRow extends ConsumerWidget {
                           color: e.value.color,
                           trend: e.value.trend,
                           trendUp: e.value.trendUp,
+                          onTap: e.value.onTap,
                         ).animate().fadeIn(delay: (e.key * 50).ms, duration: 400.ms),
                       ),
                     ))
@@ -311,6 +326,7 @@ class _StatsRow extends ConsumerWidget {
             color: statList[i].color,
             trend: statList[i].trend,
             trendUp: statList[i].trendUp,
+            onTap: statList[i].onTap,
           ),
         );
       },
@@ -343,6 +359,7 @@ class _StatData {
   final Color color;
   final String trend;
   final bool? trendUp;
+  final VoidCallback? onTap;
 
   const _StatData({
     required this.label,
@@ -351,5 +368,6 @@ class _StatData {
     required this.color,
     required this.trend,
     required this.trendUp,
+    this.onTap,
   });
 }
