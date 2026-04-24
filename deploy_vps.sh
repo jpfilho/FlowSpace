@@ -18,9 +18,10 @@ else
   git pull origin main
 fi
 
-# Copia os arquivos do build/web para o diretório servido
-echo "[2/3] Copiando build para $SERVE_DIR..."
-cp -r "$REPO_DIR/build/web/." "$SERVE_DIR/"
+# Extrai o build.zip para o diretório servido
+echo "[2/3] Extraindo build.zip para $SERVE_DIR..."
+mkdir -p "$SERVE_DIR"
+unzip -o "$REPO_DIR/build.zip" -d "$SERVE_DIR/"
 
 echo "[3/3] Deploy concluido com sucesso!"
 echo "========================================"
