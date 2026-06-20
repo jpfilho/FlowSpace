@@ -6,8 +6,8 @@ abstract class SupabaseConfig {
   /// Anon key for local Supabase instance
   static const String anonKey =
       'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9'
-      '.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzc2MjA4NTUzLCJleHAiOjIwOTE1NjE1NTN9'
-      '.8zAtbd1xAy_4MQ_Sm5pbkEG209lFwW9jn9aQPay1wSg';
+      '.eyAgCiAgICAicm9sZSI6ICJhbm9uIiwKICAgICJpc3MiOiAic3VwYWJhc2UtZGVtbyIsCiAgICAiaWF0IjogMTY0MTc2OTIwMCwKICAgICJleHAiOiAxNzk5NTM1NjAwCn0'
+      '.dc_X5iR_VP_qT0zsiyj_I_OZ2T9FtRU2BBNWN8Bu4GE';
 
   /// Storage bucket for user avatars
   static const String avatarsBucket = 'flowspace-avatars';
