@@ -1600,6 +1600,32 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+-- ============================================================
+-- FlowSpace -- Adiciona campos de SLA na tabela tasks
+-- ============================================================
+ALTER TABLE public.tasks 
+  ADD COLUMN IF NOT EXISTS deadline_at TIMESTAMP WITH TIME ZONE,
+  ADD COLUMN IF NOT EXISTS is_sla_critical BOOLEAN DEFAULT FALSE;
+
+CREATE INDEX IF NOT EXISTS idx_tasks_deadline_at ON public.tasks (deadline_at) WHERE status != 'done';
+
+CREATE OR REPLACE FUNCTION public.trg_tasks_set_completed_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.status = 'done' AND (OLD.status IS NULL OR OLD.status != 'done') THEN
+    NEW.completed_at := NOW();
+  ELSIF NEW.status != 'done' AND OLD.status = 'done' THEN
+    NEW.completed_at := NULL;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE TRIGGER tasks_set_completed_at_trigger
+BEFORE UPDATE ON public.tasks
+FOR EACH ROW
+EXECUTE FUNCTION public.trg_tasks_set_completed_at();
+
 -- ─────────────────────────────────────────────────────────────
 -- AI Copilot — Tables, Indexes, and RLS policies
 -- ─────────────────────────────────────────────────────────────
