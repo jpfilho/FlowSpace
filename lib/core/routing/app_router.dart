@@ -27,6 +27,7 @@ import '../../features/invite/presentation/invite_page.dart';
 import '../../features/focus/presentation/focus_start_page.dart';
 import '../../features/focus/presentation/focus_flow_page.dart';
 import '../../features/focus/presentation/focus_completion_page.dart';
+import '../../features/ai_copilot/presentation/ai_copilot_dashboard_page.dart';
 import '../../shared/widgets/sidebar/app_shell.dart';
 import 'app_routes.dart';
 
@@ -151,6 +152,11 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: AppRoutes.search,
             pageBuilder: (_, state) =>
                 _fadePage(const SearchPage(), state),
+          ),
+          GoRoute(
+            path: AppRoutes.aiCopilot,
+            pageBuilder: (_, state) =>
+                _fadePage(const AiCopilotDashboardPage(), state),
           ),
           GoRoute(
             path: AppRoutes.members,

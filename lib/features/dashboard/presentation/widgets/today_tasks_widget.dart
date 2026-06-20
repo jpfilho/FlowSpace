@@ -53,13 +53,13 @@ class TodayTasksWidget extends ConsumerWidget {
           // Task list — real data
           tasksAsync.when(
             data: (allTasks) {
-              // Show at most 5 most recent non-done tasks, then done at end
+              // Show at most 5 most recent non-done tasks, then done/cancelled at end
               final active = allTasks
-                  .where((t) => t.status != 'done')
+                  .where((t) => t.status != 'done' && t.status != 'cancelled')
                   .take(4)
                   .toList();
               final done = allTasks
-                  .where((t) => t.status == 'done')
+                  .where((t) => t.status == 'done' || t.status == 'cancelled')
                   .take(1)
                   .toList();
               final tasks = [...active, ...done].take(5).toList();

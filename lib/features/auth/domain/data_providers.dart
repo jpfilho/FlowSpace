@@ -56,6 +56,7 @@ class TaskData {
   final String title;
   final String status;
   final String priority;
+  final String? description;
   final String? projectId;
   final String? projectName;
   final String? assigneeId;
@@ -67,12 +68,18 @@ class TaskData {
   final String recurrenceType;     // none | daily | weekly | monthly | yearly
   final int recurrenceInterval;    // every N days/weeks/months
   final DateTime? recurrenceEndsAt; // null = forever
+  // SLA
+  final DateTime? deadlineAt;
+  final bool isSlaCritical;
+  final DateTime? createdAt;
+  final DateTime? completedAt;
 
   const TaskData({
     required this.id,
     required this.title,
     required this.status,
     required this.priority,
+    this.description,
     this.projectId,
     this.projectName,
     this.assigneeId,
@@ -83,10 +90,19 @@ class TaskData {
     this.recurrenceType = 'none',
     this.recurrenceInterval = 1,
     this.recurrenceEndsAt,
+    this.deadlineAt,
+    this.isSlaCritical = false,
+    this.createdAt,
+    this.completedAt,
   });
 
-  bool get isDone => status == 'done';
+  bool get isDone => status == 'done' || status == 'cancelled';
   bool get isRecurring => recurrenceType != 'none';
+  bool get isOverdue {
+    if (deadlineAt == null) return false;
+    if (isDone) return false;
+    return DateTime.now().isAfter(deadlineAt!);
+  }
 
   /// Para tarefas recorrentes marcadas como 'done': se hoje chegou ou passou
   /// a próxima data de vencimento, o status efetivo volta a 'todo'.
@@ -109,12 +125,18 @@ class TaskData {
       final d = DateTime.parse(s);
       return DateTime(d.year, d.month, d.day);
     }
+
+    DateTime? parseDateTimeSafe(String? s) {
+      if (s == null) return null;
+      return DateTime.parse(s);
+    }
     
     return TaskData(
         id: j['id'] as String,
         title: j['title'] as String,
         status: j['status'] as String? ?? 'todo',
         priority: j['priority'] as String? ?? 'medium',
+        description: j['description'] as String?,
         projectId: j['project_id'] as String?,
         projectName: j['projects'] != null
             ? (j['projects'] as Map<String, dynamic>)['name'] as String?
@@ -127,6 +149,10 @@ class TaskData {
         recurrenceType: j['recurrence_type'] as String? ?? 'none',
         recurrenceInterval: (j['recurrence_interval'] as num?)?.toInt() ?? 1,
         recurrenceEndsAt: parseDateSafe(j['recurrence_ends_at'] as String?),
+        deadlineAt: parseDateTimeSafe(j['deadline_at'] as String?),
+        isSlaCritical: j['is_sla_critical'] as bool? ?? false,
+        createdAt: parseDateTimeSafe(j['created_at'] as String?),
+        completedAt: parseDateTimeSafe(j['completed_at'] as String?),
       );
   }
 
@@ -134,6 +160,7 @@ class TaskData {
     String? title,
     String? status,
     String? priority,
+    String? description,
     String? projectId,
     String? projectName,
     String? assigneeId,
@@ -148,12 +175,19 @@ class TaskData {
     int? recurrenceInterval,
     DateTime? recurrenceEndsAt,
     bool clearRecurrenceEndsAt = false,
+    DateTime? deadlineAt,
+    bool clearDeadlineAt = false,
+    bool? isSlaCritical,
+    DateTime? createdAt,
+    DateTime? completedAt,
+    bool clearCompletedAt = false,
   }) =>
       TaskData(
         id: id,
         title: title ?? this.title,
         status: status ?? this.status,
         priority: priority ?? this.priority,
+        description: description ?? this.description,
         projectId: clearProjectId ? null : (projectId ?? this.projectId),
         projectName: clearProjectId ? null : (projectName ?? this.projectName),
         assigneeId: assigneeId ?? this.assigneeId,
@@ -166,6 +200,10 @@ class TaskData {
         recurrenceEndsAt: clearRecurrenceEndsAt
             ? null
             : (recurrenceEndsAt ?? this.recurrenceEndsAt),
+        deadlineAt: clearDeadlineAt ? null : (deadlineAt ?? this.deadlineAt),
+        isSlaCritical: isSlaCritical ?? this.isSlaCritical,
+        createdAt: createdAt ?? this.createdAt,
+        completedAt: clearCompletedAt ? null : (completedAt ?? this.completedAt),
       );
 
   /// Calculates the next due date based on recurrence settings.
@@ -227,7 +265,7 @@ class TasksNotifier extends AsyncNotifier<List<TaskData>> {
     final client = ref.read(supabaseProvider);
     final data = await client
         .from('tasks')
-        .select('id, title, status, priority, project_id, assignee_id, start_date, due_date, is_someday, recurrence_type, recurrence_interval, recurrence_ends_at, projects(name)')
+        .select('id, title, description, status, priority, project_id, assignee_id, start_date, due_date, is_someday, recurrence_type, recurrence_interval, recurrence_ends_at, deadline_at, is_sla_critical, created_at, completed_at, projects(name)')
         .eq('workspace_id', workspace.id)
         .order('created_at', ascending: false)
         .limit(500);
@@ -237,24 +275,89 @@ class TasksNotifier extends AsyncNotifier<List<TaskData>> {
         .toList();
 
     // ── Auto-reset de recorrências vencidas ────────────────────────────────
-    // Tarefas recorrentes concluídas cujo próximo vencimento já chegou
-    // são reativadas automaticamente: status volta a 'todo' e due_date avança.
+    // Tarefas recorrentes concluídas cujo próximo vencimento já chegou são
+    // reativadas in-place: avança due_date (em loop, para pulos de vários
+    // períodos) e restaura status para 'todo'. Não são criadas cópias novas.
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
     final List<TaskData> result = [];
-    for (final t in tasks) {
-      if (t.effectiveStatus != t.status) {
-        final next = t.nextDueDate!;
-        // Atualiza o DB de forma assíncrona (sem bloquear o carregamento)
-        client.from('tasks').update({
-          'status': 'todo',
-          'due_date': next.toIso8601String(),
-          'updated_at': DateTime.now().toIso8601String(),
-        }).eq('id', t.id);
-        result.add(t.copyWith(status: 'todo', dueDate: next));
+    for (var t in tasks) {
+      if (t.status == 'done' && t.isRecurring && t.dueDate != null) {
+        // Avança a data enquanto o próximo vencimento ainda é passado/hoje
+        var advanced = t;
+        while (true) {
+          final next = advanced.nextDueDate;
+          if (next == null) break;
+          // Para se ultrapassou o fim da série
+          if (advanced.recurrenceEndsAt != null &&
+              next.isAfter(advanced.recurrenceEndsAt!)) {
+            break;
+          }
+          // Para se o próximo vencimento ainda é futuro
+          if (next.isAfter(today)) break;
+          advanced = advanced.copyWith(dueDate: next);
+        }
+        // Se a data avançou e o próximo vencimento já é passado/hoje, reativa
+        final nextAfterAdvance = advanced.nextDueDate;
+        final needsReset = nextAfterAdvance != null &&
+            !nextAfterAdvance.isAfter(today);
+        // Ou se a própria due_date atual já chegou enquanto estava 'done'
+        final duePassed = !advanced.dueDate!.isAfter(today);
+        if (duePassed || needsReset) {
+          // Calcula a próxima data a partir do ponto atual
+          final nextDate = advanced.nextDueDate ?? advanced.dueDate!;
+          client.from('tasks').update({
+            'status': 'todo',
+            'due_date': nextDate.toIso8601String(),
+            'updated_at': DateTime.now().toIso8601String(),
+          }).eq('id', t.id);
+          result.add(advanced.copyWith(status: 'todo', dueDate: nextDate));
+        } else {
+          result.add(advanced);
+        }
       } else {
         result.add(t);
       }
     }
-    return result;
+
+    // ── Deduplicação de tarefas recorrentes ────────────────────────────────
+    // Tarefas recorrentes geradas por spawns antigos podem ter cópias
+    // idênticas (mesmo título + tipo + intervalo + projeto) com status 'todo'.
+    // Mantemos apenas a mais recente (maior due_date) e deletamos as demais.
+    final Map<String, List<TaskData>> groups = {};
+    for (final t in result) {
+      if (!t.isRecurring) continue;
+      if (t.status == 'done') continue;
+      final key =
+          '${t.title}|${t.recurrenceType}|${t.recurrenceInterval}|${t.projectId ?? ''}';
+      groups.putIfAbsent(key, () => []).add(t);
+    }
+
+    final Set<String> toDelete = {};
+    for (final group in groups.values) {
+      if (group.length <= 1) continue;
+      // Ordena por due_date descending (null por último)
+      group.sort((a, b) {
+        if (a.dueDate == null && b.dueDate == null) return 0;
+        if (a.dueDate == null) return 1;
+        if (b.dueDate == null) return -1;
+        return b.dueDate!.compareTo(a.dueDate!);
+      });
+      // Mantém o primeiro (mais recente), marca os demais para exclusão
+      for (final dup in group.skip(1)) {
+        toDelete.add(dup.id);
+      }
+    }
+
+    if (toDelete.isNotEmpty) {
+      // Deleta em batch de forma assíncrona
+      client
+          .from('tasks')
+          .delete()
+          .inFilter('id', toDelete.toList());
+    }
+
+    return result.where((t) => !toDelete.contains(t.id)).toList();
   }
 
   Future<void> refresh() async {
@@ -269,6 +372,8 @@ class TasksNotifier extends AsyncNotifier<List<TaskData>> {
     String? projectId,
     DateTime? startDate,
     DateTime? dueDate,
+    DateTime? deadlineAt,
+    bool isSlaCritical = false,
   }) async {
     final workspace = await ref.read(currentWorkspaceProvider.future);
     if (workspace == null) return (id: null, error: 'Nenhum workspace encontrado');
@@ -286,6 +391,8 @@ class TasksNotifier extends AsyncNotifier<List<TaskData>> {
         if (projectId != null) 'project_id': projectId,
         if (startDate != null) 'start_date': startDate.toIso8601String(),
         if (dueDate != null) 'due_date': dueDate.toIso8601String(),
+        if (deadlineAt != null) 'deadline_at': deadlineAt.toIso8601String(),
+        'is_sla_critical': isSlaCritical,
         'created_by': user.id,
         'assignee_id': user.id,
       }).select('id').single();
@@ -334,48 +441,16 @@ class TasksNotifier extends AsyncNotifier<List<TaskData>> {
           .update({'status': newStatus, 'updated_at': DateTime.now().toIso8601String()})
           .eq('id', taskId);
 
-      // ── Recurrence: if marking done, spawn next occurrence ──
-      if (newStatus == 'done') {
-        final current = (state.valueOrNull ?? [])
-            .where((t) => t.id == taskId)
-            .firstOrNull;
-        if (current != null && current.isRecurring) {
-          final next = current.nextDueDate;
-          final endsAt = current.recurrenceEndsAt;
-          final withinWindow =
-              endsAt == null || (next != null && next.isBefore(endsAt));
-          if (next != null && withinWindow) {
-            final workspace = await ref.read(currentWorkspaceProvider.future);
-            final user = ref.read(currentUserProvider);
-            if (workspace != null && user != null) {
-              await client.from('tasks').insert({
-                'workspace_id': workspace.id,
-                'title': current.title,
-                'status': 'todo',
-                'priority': current.priority,
-                if (current.projectId != null) 'project_id': current.projectId,
-                if (current.assigneeId != null)
-                  'assignee_id': current.assigneeId,
-                'due_date': next.toIso8601String(),
-                'created_by': user.id,
-                'recurrence_type': current.recurrenceType,
-                'recurrence_interval': current.recurrenceInterval,
-                if (current.recurrenceEndsAt != null)
-                  'recurrence_ends_at':
-                      current.recurrenceEndsAt!.toIso8601String(),
-              });
-            }
-          }
-        }
-      }
-
       // Optimistic update
       state = state.whenData((list) => list
-          .map((t) => t.id == taskId ? t.copyWith(status: newStatus) : t)
+          .map((t) => t.id == taskId
+              ? t.copyWith(
+                  status: newStatus,
+                  completedAt: newStatus == 'done' ? DateTime.now() : null,
+                  clearCompletedAt: newStatus != 'done',
+                )
+              : t)
           .toList());
-
-      // Refresh to pick up any new occurrence created
-      if (newStatus == 'done') await refresh();
 
       return null;
     } catch (e) {
@@ -408,6 +483,9 @@ class TasksNotifier extends AsyncNotifier<List<TaskData>> {
     int? recurrenceInterval,
     DateTime? recurrenceEndsAt,
     bool clearRecurrenceEndsAt = false,
+    DateTime? deadlineAt,
+    bool clearDeadlineAt = false,
+    bool? isSlaCritical,
   }) async {
     final client = ref.read(supabaseProvider);
     try {
@@ -427,6 +505,10 @@ class TasksNotifier extends AsyncNotifier<List<TaskData>> {
         if (clearRecurrenceEndsAt) 'recurrence_ends_at': null,
         if (!clearRecurrenceEndsAt && recurrenceEndsAt != null)
           'recurrence_ends_at': recurrenceEndsAt.toIso8601String(),
+        if (clearDeadlineAt) 'deadline_at': null,
+        if (!clearDeadlineAt && deadlineAt != null)
+          'deadline_at': deadlineAt.toIso8601String(),
+        if (isSlaCritical != null) 'is_sla_critical': isSlaCritical,
       };
 
       await client.from('tasks').update(updates).eq('id', taskId);
@@ -446,6 +528,11 @@ class TasksNotifier extends AsyncNotifier<List<TaskData>> {
                   recurrenceInterval: recurrenceInterval,
                   recurrenceEndsAt: recurrenceEndsAt,
                   clearRecurrenceEndsAt: clearRecurrenceEndsAt,
+                  deadlineAt: deadlineAt,
+                  clearDeadlineAt: clearDeadlineAt,
+                  isSlaCritical: isSlaCritical,
+                  completedAt: status == 'done' ? DateTime.now() : null,
+                  clearCompletedAt: status != null && status != 'done',
                 )
               : t)
           .toList());
@@ -533,7 +620,7 @@ class PagedTasksNotifier
 
     var query = client
         .from('tasks')
-        .select('id, title, status, priority, project_id, assignee_id, due_date, projects(name)')
+        .select('id, title, description, status, priority, project_id, assignee_id, due_date, deadline_at, is_sla_critical, created_at, completed_at, projects(name)')
         .eq('workspace_id', workspace.id)
         .order('created_at', ascending: false)
         .range(offset, offset + _kTasksPageSize - 1);
@@ -946,7 +1033,7 @@ final dashboardStatsProvider = FutureProvider<DashboardStats>((ref) async {
   final completed = tasks.where((t) => t.status == 'done').length;
   final inProgress = tasks.where((t) => t.status == 'in_progress').length;
   final overdue = tasks.where((t) {
-    if (t.dueDate == null || t.status == 'done') return false;
+    if (t.dueDate == null || t.status == 'done' || t.status == 'cancelled') return false;
     return t.dueDate!.isBefore(today);
   }).length;
 

@@ -566,7 +566,8 @@ class _TableDataRow extends ConsumerWidget {
     final today = DateTime.now();
     final isOverdue = task.dueDate != null &&
         task.dueDate!.isBefore(DateTime(today.year, today.month, today.day)) &&
-        task.status != 'done';
+        task.status != 'done' &&
+        task.status != 'cancelled';
 
     return GestureDetector(
       onTap: () => context.push('/tasks/${task.id}'),

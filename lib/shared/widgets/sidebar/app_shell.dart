@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import '../../../core/theme/index.dart';
 import '../../../core/routing/app_routes.dart';
 import '../../../core/providers/app_providers.dart';
@@ -21,6 +22,93 @@ class AppShell extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Escuta alertas de SLA para exibir SnackBar premium
+    ref.listen<SlaAlert?>(slaAlertProvider, (previous, next) {
+      if (next != null) {
+        final task = next.task;
+        final messenger = ScaffoldMessenger.of(context);
+        
+        messenger.clearSnackBars();
+        messenger.showSnackBar(
+          SnackBar(
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            duration: const Duration(seconds: 8),
+            content: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: context.isDark ? AppColors.surfaceVariantDark : Colors.grey.shade900,
+                borderRadius: BorderRadius.circular(AppRadius.lg),
+                border: Border.all(
+                  color: AppColors.error.withValues(alpha: 0.3),
+                  width: 1.5,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.3),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.alarm_rounded,
+                    color: AppColors.error,
+                  )
+                      .animate(onPlay: (c) => c.repeat(reverse: true))
+                      .scale(end: const Offset(1.15, 1.15), duration: 500.ms, curve: Curves.easeInOut),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'ALERTA DE SLA',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.error,
+                            letterSpacing: 1.1,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          next.message,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Colors.white,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  TextButton(
+                    onPressed: () {
+                      messenger.hideCurrentSnackBar();
+                      context.go('/tasks/${task.id}');
+                    },
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppColors.primary,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                    ),
+                    child: const Text('VER', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      }
+    });
+
     final isDesktop = Responsive.isDesktop(context);
     final isTablet = Responsive.isTablet(context);
     final isMobile = Responsive.isMobile(context);
@@ -161,7 +249,10 @@ class _FlowTopBar extends ConsumerWidget implements PreferredSizeWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = context.isDark;
     final user = ref.watch(currentUserProvider);
-    final name = (user?.userMetadata?['name'] as String?) ?? 'Usuário';
+    final name = ((user?.userMetadata?['name'] as String?)
+        ?? (user?.userMetadata?['full_name'] as String?)
+        ?? user?.email?.split('@').first
+        ?? 'Usuário').split(' ').first;
 
     return Container(
       height: AppSpacing.topbarHeight,

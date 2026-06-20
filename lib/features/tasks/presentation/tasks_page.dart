@@ -926,19 +926,36 @@ class _TaskListTileState extends ConsumerState<_TaskListTile> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      task.title,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color: task.isDone
-                            ? context.cTextMuted
-                            : context.cTextPrimary,
-                        decoration: task.isDone
-                            ? TextDecoration.lineThrough
-                            : TextDecoration.none,
-                        decorationColor: context.cTextMuted,
-                      ),
+                    Row(
+                      children: [
+                        if (task.isSlaCritical) ...[
+                          Icon(
+                            Icons.alarm_rounded,
+                            size: 16,
+                            color: task.isOverdue ? AppColors.error : AppColors.primary,
+                          )
+                              .animate(onPlay: (controller) => controller.repeat(reverse: true))
+                              .scale(end: const Offset(1.15, 1.15), duration: 1000.ms, curve: Curves.easeInOut)
+                              .shimmer(duration: 2000.ms, color: Colors.white.withValues(alpha: 0.5)),
+                          const SizedBox(width: 6),
+                        ],
+                        Expanded(
+                          child: Text(
+                            task.title,
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                              color: task.isDone
+                                  ? context.cTextMuted
+                                  : context.cTextPrimary,
+                              decoration: task.isDone
+                                  ? TextDecoration.lineThrough
+                                  : TextDecoration.none,
+                              decorationColor: context.cTextMuted,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: AppSpacing.sp6),
                     Row(
@@ -949,6 +966,10 @@ class _TaskListTileState extends ConsumerState<_TaskListTile> {
                         if (task.projectName != null) ...[
                           const SizedBox(width: AppSpacing.sp6),
                           _ProjectBadge(name: task.projectName!),
+                        ],
+                        if (task.deadlineAt != null) ...[
+                          const SizedBox(width: AppSpacing.sp6),
+                          _SlaBadge(deadline: task.deadlineAt!, isDone: task.isDone),
                         ],
                         if (task.dueDate != null) ...[
                           const SizedBox(width: AppSpacing.sp6),
@@ -1300,6 +1321,71 @@ class _DueDateBadge extends StatelessWidget {
   }
 }
 
+class _SlaBadge extends StatelessWidget {
+  final DateTime deadline;
+  final bool isDone;
+  const _SlaBadge({required this.deadline, required this.isDone});
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final isOverdue = deadline.isBefore(now) && !isDone;
+    
+    // Calculate time remaining
+    final diff = deadline.difference(now);
+    final isLessOrEqualHour = diff.inMinutes <= 60 && !diff.isNegative;
+    
+    final color = isOverdue 
+        ? AppColors.error 
+        : isLessOrEqualHour
+            ? AppColors.warning
+            : AppColors.primary;
+            
+    String label;
+    if (isOverdue) {
+      final hours = diff.abs().inHours;
+      if (hours > 0) {
+        label = 'Atrasada há ${hours}h';
+      } else {
+        label = 'Atrasada há ${diff.abs().inMinutes} min';
+      }
+    } else {
+      final hours = diff.inHours;
+      if (hours > 24) {
+        label = 'SLA: ${deadline.day}/${deadline.month}';
+      } else if (hours > 0) {
+        label = 'SLA em ${hours}h';
+      } else {
+        label = 'SLA em ${diff.inMinutes} min';
+      }
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sp6, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.alarm_rounded, size: 10, color: color),
+          const SizedBox(width: 3),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // ── Kanban View ─────────────────────────────────────────────
 class _KanbanView extends StatelessWidget {
   final List<TaskData> tasks;
@@ -1445,12 +1531,33 @@ class _KanbanCardState extends ConsumerState<_KanbanCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(task.title,
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: context.cTextPrimary)),
+          Row(
+            children: [
+              if (task.isSlaCritical) ...[
+                Icon(
+                  Icons.alarm_rounded,
+                  size: 14,
+                  color: task.isOverdue ? AppColors.error : AppColors.primary,
+                )
+                    .animate(onPlay: (controller) => controller.repeat(reverse: true))
+                    .scale(end: const Offset(1.15, 1.15), duration: 1000.ms, curve: Curves.easeInOut)
+                    .shimmer(duration: 2000.ms, color: Colors.white.withValues(alpha: 0.5)),
+                const SizedBox(width: 4),
+              ],
+              Expanded(
+                child: Text(task.title,
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: context.cTextPrimary)),
+              ),
+            ],
+          ),
           const SizedBox(height: AppSpacing.sp10),
           Row(children: [
             PriorityTag(priority: task.priority),
             const Spacer(),
+            if (task.deadlineAt != null) ...[
+              _SlaBadge(deadline: task.deadlineAt!, isDone: task.isDone),
+              const SizedBox(width: AppSpacing.sp4),
+            ],
             if (task.dueDate != null) _DueDateBadge(date: task.dueDate!),
             if (task.isRecurring) ...[
               const SizedBox(width: AppSpacing.sp4),
@@ -1505,6 +1612,8 @@ class _CreateTaskSheetState extends ConsumerState<_CreateTaskSheet> {
   final String _status = 'todo';
   String? _projectId;
   DateTime? _dueDate;
+  bool _isSlaCritical = false;
+  DateTime? _deadlineAt;
   bool _loading = false;
   String? _error;
 
@@ -1521,6 +1630,53 @@ class _CreateTaskSheetState extends ConsumerState<_CreateTaskSheet> {
     super.dispose();
   }
 
+  Future<void> _pickDeadline() async {
+    final pickedDate = await showDatePicker(
+      context: context,
+      initialDate: _deadlineAt ?? DateTime.now(),
+      firstDate: DateTime.now().subtract(const Duration(days: 365)),
+      lastDate: DateTime.now().add(const Duration(days: 365 * 3)),
+      helpText: 'Data limite do SLA',
+      confirmText: 'Confirmar',
+      cancelText: 'Cancelar',
+      builder: (context, child) => Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: const ColorScheme.light(primary: AppColors.primary),
+        ),
+        child: child!,
+      ),
+    );
+    if (pickedDate == null) return;
+
+    if (!mounted) return;
+
+    final pickedTime = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(_deadlineAt ?? DateTime.now()),
+      helpText: 'Hora limite do SLA',
+      confirmText: 'Confirmar',
+      cancelText: 'Cancelar',
+      builder: (context, child) => Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: const ColorScheme.light(primary: AppColors.primary),
+        ),
+        child: child!,
+      ),
+    );
+
+    if (pickedTime != null) {
+      setState(() {
+        _deadlineAt = DateTime(
+          pickedDate.year,
+          pickedDate.month,
+          pickedDate.day,
+          pickedTime.hour,
+          pickedTime.minute,
+        );
+      });
+    }
+  }
+
   Future<void> _submit() async {
     if (_ctrl.text.trim().isEmpty) {
       setState(() => _error = 'Digite o título da tarefa');
@@ -1534,6 +1690,8 @@ class _CreateTaskSheetState extends ConsumerState<_CreateTaskSheet> {
       priority: _priority,
       projectId: _projectId,
       dueDate: _dueDate,
+      deadlineAt: _deadlineAt,
+      isSlaCritical: _isSlaCritical,
     );
 
     if (mounted) {
@@ -1717,6 +1875,92 @@ class _CreateTaskSheetState extends ConsumerState<_CreateTaskSheet> {
                         size: 16, color: AppColors.primary),
                   ),
               ]),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sp20),
+
+          // ── SLA Crítico ──────────────────────────────────
+          Row(
+            children: [
+              Icon(
+                Icons.warning_amber_rounded,
+                size: 18,
+                color: _isSlaCritical ? AppColors.error : context.cTextMuted,
+              ),
+              const SizedBox(width: AppSpacing.sp8),
+              Text('SLA Crítico', style: context.labelMd),
+              const Spacer(),
+              Switch(
+                value: _isSlaCritical,
+                activeColor: AppColors.error,
+                onChanged: (val) {
+                  setState(() {
+                    _isSlaCritical = val;
+                  });
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sp12),
+
+          // ── Prazo SLA (Deadline) ─────────────────────────
+          Text('Prazo fatal (SLA)', style: context.labelMd),
+          const SizedBox(height: AppSpacing.sp8),
+          InkWell(
+            onTap: _pickDeadline,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.sp12, vertical: AppSpacing.sp10),
+              decoration: BoxDecoration(
+                color: _deadlineAt != null
+                    ? AppColors.error.withValues(alpha: 0.08)
+                    : (context.isDark
+                        ? AppColors.surfaceVariantDark
+                        : AppColors.surfaceVariant),
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                border: Border.all(
+                  color: _deadlineAt != null
+                      ? AppColors.error.withValues(alpha: 0.4)
+                      : (context.isDark
+                          ? AppColors.borderDark
+                          : AppColors.border),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.alarm_rounded,
+                      size: 16,
+                      color: _deadlineAt != null
+                          ? AppColors.error
+                          : context.cTextMuted),
+                  const SizedBox(width: AppSpacing.sp8),
+                  Expanded(
+                    child: Text(
+                      _deadlineAt != null
+                          ? '${_deadlineAt!.day.toString().padLeft(2, '0')}/${_deadlineAt!.month.toString().padLeft(2, '0')}/${_deadlineAt!.year} ${_deadlineAt!.hour.toString().padLeft(2, '0')}:${_deadlineAt!.minute.toString().padLeft(2, '0')}'
+                          : 'Sem prazo fatal definido',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: _deadlineAt != null
+                            ? AppColors.error
+                            : context.cTextMuted,
+                        fontWeight: _deadlineAt != null
+                            ? FontWeight.w600
+                            : FontWeight.w400,
+                      ),
+                    ),
+                  ),
+                  if (_deadlineAt != null)
+                    GestureDetector(
+                      onTap: () => setState(() {
+                        _deadlineAt = null;
+                      }),
+                      child: const Icon(Icons.close_rounded,
+                          size: 16, color: AppColors.error),
+                    ),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: AppSpacing.sp20),

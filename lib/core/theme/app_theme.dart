@@ -215,7 +215,9 @@ class AppTheme {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppRadius.xl),
         ),
-        titleTextStyle: AppTypography.textTheme.titleLarge,
+        titleTextStyle: isDark
+            ? AppTypography.darkTextTheme.titleLarge
+            : AppTypography.textTheme.titleLarge,
       ),
 
       // Tooltip
@@ -295,7 +297,12 @@ class AppTheme {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppRadius.md),
         ),
-        titleTextStyle: AppTypography.textTheme.bodyMedium,
+        titleTextStyle: isDark
+            ? AppTypography.darkTextTheme.bodyMedium
+            : AppTypography.textTheme.bodyMedium,
+        subtitleTextStyle: isDark
+            ? AppTypography.darkTextTheme.bodySmall
+            : AppTypography.textTheme.bodySmall,
       ),
 
       // Tab Bar

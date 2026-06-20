@@ -39,7 +39,10 @@ class _FocusStartPageState extends ConsumerState<FocusStartPage> {
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(currentUserProvider);
-    final name = (user?.userMetadata?['name'] as String?)?.split(' ').first ?? 'Usuário';
+    final name = ((user?.userMetadata?['name'] as String?)
+        ?? (user?.userMetadata?['full_name'] as String?)
+        ?? user?.email?.split('@').first
+        ?? 'Usuário').split(' ').first;
     final focusTasks = ref.watch(focusTasksProvider);
     final overdue = focusTasks.where((t) => t.isOverdue).length;
     final today = focusTasks.where((t) => t.isDueToday).length;

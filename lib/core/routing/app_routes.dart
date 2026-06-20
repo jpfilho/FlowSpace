@@ -22,6 +22,7 @@ abstract class AppRoutes {
   static const String members = '/members';
   static const String databases = '/databases';
   static const String invite = '/invite';
+  static const String aiCopilot = '/ai-copilot';
 
   // Focus Start
   static const String focus = '/focus';

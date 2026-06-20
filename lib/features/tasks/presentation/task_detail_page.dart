@@ -10,6 +10,9 @@ import '../../auth/domain/auth_provider.dart';
 import 'edit_task_sheet.dart';
 import 'task_attachments_widget.dart';
 import 'widgets/task_5w2h_section.dart';
+import '../../ai_copilot/domain/models/ai_copilot_models.dart';
+import '../../ai_copilot/data/repositories/ai_repository.dart';
+import '../../ai_copilot/presentation/widgets/ai_task_copilot_card.dart';
 
 // ── Providers locais ─────────────────────────────────────────
 
@@ -21,7 +24,7 @@ final taskDetailProvider =
   final data = await client
       .from('tasks')
       .select(
-          'id, title, description, status, priority, due_date, created_at, updated_at, project_id, assignee_id, created_by, projects(name, status)')
+          'id, title, description, status, priority, due_date, deadline_at, is_sla_critical, created_at, completed_at, updated_at, project_id, assignee_id, created_by, projects(name, status)')
       .eq('id', taskId)
       .maybeSingle();
   return data;
@@ -103,6 +106,16 @@ class TaskDetailPage extends ConsumerWidget {
                         assigneeId: task['assignee_id'] as String?,
                         dueDate: task['due_date'] != null
                             ? DateTime.parse(task['due_date'] as String)
+                            : null,
+                        deadlineAt: task['deadline_at'] != null
+                            ? DateTime.parse(task['deadline_at'] as String)
+                            : null,
+                        isSlaCritical: task['is_sla_critical'] as bool? ?? false,
+                        createdAt: task['created_at'] != null
+                            ? DateTime.parse(task['created_at'] as String)
+                            : null,
+                        completedAt: task['completed_at'] != null
+                            ? DateTime.parse(task['completed_at'] as String)
                             : null,
                       );
                       showModalBottomSheet(
@@ -186,7 +199,14 @@ class _TaskDetailBody extends ConsumerWidget {
         : null;
     final description = task['description'] as String?;
     final isOverdue =
-        dueDate != null && dueDate.isBefore(DateTime.now()) && status != 'done';
+        dueDate != null && dueDate.isBefore(DateTime.now()) && status != 'done' && status != 'cancelled';
+    final deadlineAt = task['deadline_at'] != null
+        ? DateTime.parse(task['deadline_at'] as String)
+        : null;
+    final isSlaCritical = task['is_sla_critical'] as bool? ?? false;
+    final isSlaOverdue = deadlineAt != null &&
+        deadlineAt.isBefore(DateTime.now()) &&
+        status != 'done' && status != 'cancelled';
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -218,6 +238,19 @@ class _TaskDetailBody extends ConsumerWidget {
                           '${dueDate.day.toString().padLeft(2, '0')}/${dueDate.month.toString().padLeft(2, '0')}/${dueDate.year}',
                       color: isOverdue ? AppColors.error : AppColors.success,
                     ),
+                  if (isSlaCritical)
+                    _InfoChip(
+                      icon: Icons.warning_amber_rounded,
+                      label: 'SLA CRÍTICO',
+                      color: AppColors.error,
+                    ),
+                  if (deadlineAt != null)
+                    _InfoChip(
+                      icon: Icons.alarm_rounded,
+                      label:
+                          'SLA: ${deadlineAt.day.toString().padLeft(2, '0')}/${deadlineAt.month.toString().padLeft(2, '0')}/${deadlineAt.year} ${deadlineAt.hour.toString().padLeft(2, '0')}:${deadlineAt.minute.toString().padLeft(2, '0')}',
+                      color: isSlaOverdue ? AppColors.error : AppColors.primary,
+                    ),
                 ],
               ).animate().fadeIn(duration: 300.ms),
               const SizedBox(height: AppSpacing.sp24),
@@ -236,6 +269,10 @@ class _TaskDetailBody extends ConsumerWidget {
 
               // ── Descrição
               _DescriptionSection(taskId: taskId, description: description),
+              const SizedBox(height: AppSpacing.sp24),
+
+              // ── Copiloto IA
+              _AiTaskDetailSection(taskId: taskId),
               const SizedBox(height: AppSpacing.sp24),
 
               // ── Labels / Etiquetas
@@ -929,6 +966,13 @@ class _TaskSidebar extends ConsumerWidget {
     final updatedAt = task['updated_at'] != null
         ? DateTime.parse(task['updated_at'] as String)
         : null;
+    final completedAt = task['completed_at'] != null
+        ? DateTime.parse(task['completed_at'] as String)
+        : null;
+    final deadlineAt = task['deadline_at'] != null
+        ? DateTime.parse(task['deadline_at'] as String)
+        : null;
+    final isSlaCritical = task['is_sla_critical'] as bool? ?? false;
     final dueDate = task['due_date'] != null
         ? DateTime.parse(task['due_date'] as String)
         : null;
@@ -938,6 +982,11 @@ class _TaskSidebar extends ConsumerWidget {
     String fmt(DateTime? d) {
       if (d == null) return '—';
       return '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+    }
+
+    String fmtTime(DateTime? d) {
+      if (d == null) return '—';
+      return '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year} ${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
     }
 
     return ListView(
@@ -1017,6 +1066,35 @@ class _TaskSidebar extends ConsumerWidget {
                   style: TextStyle(fontSize: 13, color: context.cTextMuted)),
         ),
 
+        _SidebarRow(
+          label: 'SLA Crítico',
+          child: Text(
+            isSlaCritical ? 'Sim' : 'Não',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: isSlaCritical ? FontWeight.bold : FontWeight.normal,
+              color: isSlaCritical ? AppColors.error : context.cTextMuted,
+            ),
+          ),
+        ),
+        _SidebarRow(
+          label: 'Prazo SLA',
+          child: Text(
+            fmtTime(deadlineAt),
+            style: TextStyle(
+              fontSize: 13,
+              color: (deadlineAt != null && deadlineAt.isBefore(DateTime.now()) && status != 'done' && status != 'cancelled')
+                  ? AppColors.error
+                  : context.cTextMuted,
+            ),
+          ),
+        ),
+        if (completedAt != null)
+          _SidebarRow(
+            label: 'Concluído em',
+            child: Text(fmtTime(completedAt),
+                style: TextStyle(fontSize: 13, color: AppColors.success)),
+          ),
         _SidebarRow(
           label: 'Criado em',
           child: Text(fmt(createdAt),
@@ -1559,3 +1637,216 @@ class _LabelPickerDialogState
     );
   }
 }
+
+// ── Seção do Copiloto IA (Analise de Risco & Recomendações) ────
+class _AiTaskDetailSection extends ConsumerWidget {
+  final String taskId;
+  const _AiTaskDetailSection({required this.taskId});
+
+  Color _getRiskColor(String riskLevel) {
+    switch (riskLevel) {
+      case 'critical':
+        return AppColors.error;
+      case 'high':
+        return AppColors.priorityHigh;
+      case 'medium':
+        return AppColors.priorityMedium;
+      default:
+        return AppColors.priorityLow;
+    }
+  }
+
+  String _getRiskLabel(String riskLevel) {
+    switch (riskLevel) {
+      case 'critical':
+        return 'Crítico';
+      case 'high':
+        return 'Alto';
+      case 'medium':
+        return 'Médio';
+      default:
+        return 'Baixo';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isDark = context.isDark;
+    final analysisAsync = ref.watch(taskAnalysisProvider(taskId));
+    final runAnalysisState = ref.watch(runTaskAnalysisProvider);
+    final recommendationsAsync = ref.watch(workspaceRecommendationsProvider);
+
+    final isAnalyzing = runAnalysisState is AsyncLoading;
+
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.sp16),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.surfaceDark : AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(
+          color: isDark ? AppColors.borderDark : AppColors.border,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.auto_awesome_rounded, color: AppColors.primary, size: 18),
+              const SizedBox(width: 8),
+              Text(
+                'Copiloto IA — Análise de Risco',
+                style: context.bodyMd.copyWith(fontWeight: FontWeight.w600),
+              ),
+              const Spacer(),
+              FlowButton(
+                label: isAnalyzing ? 'Analisando...' : 'Gerar com IA',
+                leadingIcon: isAnalyzing ? null : Icons.bolt_rounded,
+                onPressed: isAnalyzing
+                    ? null
+                    : () => ref.read(runTaskAnalysisProvider.notifier).runAnalysis(taskId),
+                size: FlowButtonSize.sm,
+              ),
+            ],
+          ),
+          if (runAnalysisState is AsyncError) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.error.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+              ),
+              child: Text(
+                'Erro ao analisar: ${runAnalysisState.error.toString().replaceAll('Exception: ', '')}',
+                style: const TextStyle(color: AppColors.error, fontSize: 12),
+              ),
+            ),
+          ],
+          const SizedBox(height: 12),
+          analysisAsync.when(
+            loading: () => const Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 8.0),
+                child: SizedBox(
+                  height: 20,
+                  width: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            ),
+            error: (err, _) => Text(
+              'Erro ao carregar análise: $err',
+              style: const TextStyle(color: AppColors.error),
+            ),
+            data: (AiTaskAnalysis? analysis) {
+              if (analysis == null) {
+                return Text(
+                  'Nenhuma análise gerada para esta tarefa. Clique em "Gerar com IA" para avaliar riscos, pendências e prioridades sugeridas.',
+                  style: context.bodySm.copyWith(color: context.cTextMuted),
+                );
+              }
+
+              final riskColor = _getRiskColor(analysis.riskLevel);
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        'Nível de Risco:',
+                        style: context.bodySm.copyWith(fontWeight: FontWeight.w500),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: riskColor.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(AppRadius.sm),
+                        ),
+                        child: Text(
+                          _getRiskLabel(analysis.riskLevel).toUpperCase(),
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: riskColor,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Justificativa do risco:',
+                    style: context.bodySm.copyWith(fontWeight: FontWeight.w500),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    analysis.riskReason,
+                    style: TextStyle(fontSize: 13, color: context.cTextPrimary, height: 1.4),
+                  ),
+                  if (analysis.suggestedNextStep != null &&
+                      analysis.suggestedNextStep!.trim().isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      'Próximo passo sugerido:',
+                      style: context.bodySm.copyWith(fontWeight: FontWeight.w500),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      analysis.suggestedNextStep!,
+                      style: TextStyle(fontSize: 13, color: context.cTextPrimary, height: 1.4),
+                    ),
+                  ],
+                  if (analysis.missingInformation != null &&
+                      analysis.missingInformation!.trim().isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      'Informações ausentes:',
+                      style: context.bodySm.copyWith(fontWeight: FontWeight.w500),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      analysis.missingInformation!,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: isDark ? Colors.red.shade300 : Colors.red.shade900,
+                        fontWeight: FontWeight.w500,
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                ],
+              );
+            },
+          ),
+          
+          // Show associated pending recommendations for this task
+          recommendationsAsync.maybeWhen(
+            data: (List<AiRecommendation> recs) {
+              final pendingTaskRecs = recs
+                  .where((r) => r.taskId == taskId && r.status == 'pending')
+                  .toList();
+              if (pendingTaskRecs.isEmpty) return const SizedBox.shrink();
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Divider(height: 24),
+                  Text(
+                    'Recomendações Pendentes para esta Tarefa:',
+                    style: context.bodySm.copyWith(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 12),
+                  ...pendingTaskRecs.map((r) => AiTaskCopilotCard(recommendation: r)),
+                ],
+              );
+            },
+            orElse: () => const SizedBox.shrink(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+

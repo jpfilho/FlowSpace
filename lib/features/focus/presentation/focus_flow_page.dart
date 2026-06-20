@@ -771,8 +771,7 @@ class _RescheduleModalState extends ConsumerState<_RescheduleModal> {
   @override
   Widget build(BuildContext context) {
     final dateFormat = DateFormat('dd/MM/yyyy');
-    final canSubmit =
-        _selectedDate != null && _reasonCtrl.text.trim().isNotEmpty;
+    final canSubmit = _selectedDate != null;
 
     return AlertDialog(
       backgroundColor:
@@ -843,7 +842,7 @@ class _RescheduleModalState extends ConsumerState<_RescheduleModal> {
               onChanged: (_) => setState(() {}),
               maxLines: 2,
               decoration: InputDecoration(
-                labelText: 'Motivo do adiamento *',
+                labelText: 'Motivo do adiamento (opcional)',
                 hintText: 'Ex: aguardando informação do cliente...',
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(AppRadius.md),

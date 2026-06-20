@@ -32,6 +32,12 @@ class _FlowSidebarState extends ConsumerState<FlowSidebar> {
       label: 'Dashboard',
     ),
     SidebarNavItem(
+      route: AppRoutes.aiCopilot,
+      icon: Icons.auto_awesome_outlined,
+      activeIcon: Icons.auto_awesome_rounded,
+      label: 'Copiloto IA',
+    ),
+    SidebarNavItem(
       route: AppRoutes.tasks,
       icon: Icons.check_box_outline_blank_rounded,
       activeIcon: Icons.check_box_rounded,
@@ -449,7 +455,10 @@ class _UserTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final name = (user?.userMetadata?['name'] as String?) ?? 'Usuário';
+    final name = ((user?.userMetadata?['name'] as String?)
+        ?? (user?.userMetadata?['full_name'] as String?)
+        ?? user?.email?.split('@').first
+        ?? 'Usuário').split(' ').first;
     final email = user?.email ?? '';
 
     if (collapsed) {

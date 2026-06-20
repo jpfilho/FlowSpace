@@ -26,6 +26,9 @@ class _EditTaskSheetState extends ConsumerState<EditTaskSheet> {
   late int _recurrenceInterval;
   DateTime? _recurrenceEndsAt;
   bool _dueDateAutoSet = false; // true quando a data foi preenchida automaticamente pela recorrência
+  // SLA
+  late bool _isSlaCritical;
+  late DateTime? _deadlineAt;
   bool _loading = false;
   String? _error;
 
@@ -55,6 +58,8 @@ class _EditTaskSheetState extends ConsumerState<EditTaskSheet> {
     _recurrenceType = widget.task.recurrenceType;
     _recurrenceInterval = widget.task.recurrenceInterval;
     _recurrenceEndsAt = widget.task.recurrenceEndsAt;
+    _isSlaCritical = widget.task.isSlaCritical;
+    _deadlineAt = widget.task.deadlineAt;
   }
 
   @override
@@ -87,6 +92,7 @@ class _EditTaskSheetState extends ConsumerState<EditTaskSheet> {
     final clearDueDate = _dueDate == null && widget.task.dueDate != null;
     final clearEndsAt = _recurrenceEndsAt == null &&
         widget.task.recurrenceEndsAt != null;
+    final clearDeadlineAt = _deadlineAt == null && widget.task.deadlineAt != null;
 
     final err = await ref.read(tasksProvider.notifier).updateTask(
       taskId: widget.task.id,
@@ -101,6 +107,9 @@ class _EditTaskSheetState extends ConsumerState<EditTaskSheet> {
       recurrenceInterval: _recurrenceInterval,
       recurrenceEndsAt: _recurrenceEndsAt,
       clearRecurrenceEndsAt: clearEndsAt,
+      deadlineAt: _deadlineAt,
+      clearDeadlineAt: clearDeadlineAt,
+      isSlaCritical: _isSlaCritical,
     );
 
     if (mounted) {
@@ -142,6 +151,53 @@ class _EditTaskSheetState extends ConsumerState<EditTaskSheet> {
       setState(() {
         _dueDate = picked;
         _dueDateAutoSet = false; // usuário definiu manualmente
+      });
+    }
+  }
+
+  Future<void> _pickDeadline() async {
+    final pickedDate = await showDatePicker(
+      context: context,
+      initialDate: _deadlineAt ?? DateTime.now(),
+      firstDate: DateTime.now().subtract(const Duration(days: 365)),
+      lastDate: DateTime.now().add(const Duration(days: 365 * 3)),
+      helpText: 'Data limite do SLA',
+      confirmText: 'Confirmar',
+      cancelText: 'Cancelar',
+      builder: (context, child) => Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: const ColorScheme.light(primary: AppColors.primary),
+        ),
+        child: child!,
+      ),
+    );
+    if (pickedDate == null) return;
+
+    if (!mounted) return;
+
+    final pickedTime = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(_deadlineAt ?? DateTime.now()),
+      helpText: 'Hora limite do SLA',
+      confirmText: 'Confirmar',
+      cancelText: 'Cancelar',
+      builder: (context, child) => Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: const ColorScheme.light(primary: AppColors.primary),
+        ),
+        child: child!,
+      ),
+    );
+
+    if (pickedTime != null) {
+      setState(() {
+        _deadlineAt = DateTime(
+          pickedDate.year,
+          pickedDate.month,
+          pickedDate.day,
+          pickedTime.hour,
+          pickedTime.minute,
+        );
       });
     }
   }
@@ -303,6 +359,92 @@ class _EditTaskSheetState extends ConsumerState<EditTaskSheet> {
                         }),
                         child: const Icon(Icons.close_rounded,
                             size: 16, color: AppColors.primary),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sp20),
+
+            // ── SLA Crítico ──────────────────────────────────
+            Row(
+              children: [
+                Icon(
+                  Icons.warning_amber_rounded,
+                  size: 18,
+                  color: _isSlaCritical ? AppColors.error : context.cTextMuted,
+                ),
+                const SizedBox(width: AppSpacing.sp8),
+                Text('SLA Crítico', style: context.labelMd),
+                const Spacer(),
+                Switch(
+                  value: _isSlaCritical,
+                  activeColor: AppColors.error,
+                  onChanged: (val) {
+                    setState(() {
+                      _isSlaCritical = val;
+                    });
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.sp12),
+
+            // ── Prazo SLA (Deadline) ─────────────────────────
+            Text('Prazo fatal (SLA)', style: context.labelMd),
+            const SizedBox(height: AppSpacing.sp8),
+            InkWell(
+              onTap: _pickDeadline,
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.sp12, vertical: AppSpacing.sp10),
+                decoration: BoxDecoration(
+                  color: _deadlineAt != null
+                      ? AppColors.error.withValues(alpha: 0.08)
+                      : (context.isDark
+                          ? AppColors.surfaceVariantDark
+                          : AppColors.surfaceVariant),
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                  border: Border.all(
+                    color: _deadlineAt != null
+                        ? AppColors.error.withValues(alpha: 0.4)
+                        : (context.isDark
+                            ? AppColors.borderDark
+                            : AppColors.border),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.alarm_rounded,
+                        size: 16,
+                        color: _deadlineAt != null
+                            ? AppColors.error
+                            : context.cTextMuted),
+                    const SizedBox(width: AppSpacing.sp8),
+                    Expanded(
+                      child: Text(
+                        _deadlineAt != null
+                            ? '${_deadlineAt!.day.toString().padLeft(2, '0')}/${_deadlineAt!.month.toString().padLeft(2, '0')}/${_deadlineAt!.year} ${_deadlineAt!.hour.toString().padLeft(2, '0')}:${_deadlineAt!.minute.toString().padLeft(2, '0')}'
+                            : 'Sem prazo fatal definido',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: _deadlineAt != null
+                              ? AppColors.error
+                              : context.cTextMuted,
+                          fontWeight: _deadlineAt != null
+                              ? FontWeight.w600
+                              : FontWeight.w400,
+                        ),
+                      ),
+                    ),
+                    if (_deadlineAt != null)
+                      GestureDetector(
+                        onTap: () => setState(() {
+                          _deadlineAt = null;
+                        }),
+                        child: const Icon(Icons.close_rounded,
+                            size: 16, color: AppColors.error),
                       ),
                   ],
                 ),

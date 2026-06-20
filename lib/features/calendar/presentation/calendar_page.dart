@@ -670,11 +670,24 @@ class _DayCellState extends State<_DayCell> {
   Widget build(BuildContext context) {
     final isDesktop = Responsive.isDesktop(context);
 
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    
+    final hasOverdue = widget.tasks.any((t) =>
+        t.isOverdue ||
+        (t.dueDate != null && t.dueDate!.isBefore(today) && !t.isDone));
+        
+    final allCompleted = widget.tasks.isNotEmpty &&
+        widget.tasks.every((t) => t.isDone);
+
     Color bgColor;
     Color borderColor;
+    double borderWidth = 1.0;
+
     if (widget.isSelected) {
       bgColor = AppColors.primary.withValues(alpha: 0.12);
       borderColor = AppColors.primary;
+      borderWidth = 2.0;
     } else if (widget.isToday) {
       bgColor = AppColors.primary.withValues(alpha: 0.06);
       borderColor = AppColors.primary.withValues(alpha: 0.3);
@@ -689,6 +702,14 @@ class _DayCellState extends State<_DayCell> {
       borderColor = context.isDark ? AppColors.borderDark : AppColors.border;
     }
 
+    if (hasOverdue) {
+      borderColor = AppColors.error;
+      borderWidth = widget.isSelected ? 2.5 : 1.5;
+    } else if (allCompleted) {
+      borderColor = AppColors.success;
+      borderWidth = widget.isSelected ? 2.5 : 1.5;
+    }
+
     return MouseRegion(
       onEnter: (_) => setState(() => _hovering = true),
       onExit: (_) => setState(() => _hovering = false),
@@ -700,7 +721,7 @@ class _DayCellState extends State<_DayCell> {
           decoration: BoxDecoration(
             color: bgColor,
             borderRadius: BorderRadius.circular(AppRadius.md),
-            border: Border.all(color: borderColor),
+            border: Border.all(color: borderColor, width: borderWidth),
           ),
           child: Padding(
             padding: const EdgeInsets.all(6),

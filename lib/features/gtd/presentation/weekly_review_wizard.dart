@@ -80,6 +80,18 @@ const _reviewSteps = [
     color: Color(0xFFF59E0B),
   ),
   _ReviewStep(
+    title: 'Tarefas Sem Data',
+    description: 'Atribua datas às tarefas que ainda não têm prazo definido.',
+    icon: Icons.event_busy_rounded,
+    color: Color(0xFF06B6D4),
+  ),
+  _ReviewStep(
+    title: 'Inbox Não Processado',
+    description: 'Converta em tarefas as capturas que ainda estão esperando.',
+    icon: Icons.mark_email_unread_rounded,
+    color: Color(0xFF8B5CF6),
+  ),
+  _ReviewStep(
     title: 'Fechamento',
     description: 'Defina o seu foco para a semana e conclua a revisão.',
     icon: Icons.rocket_launch_rounded,
@@ -310,7 +322,9 @@ class _WeeklyReviewDialogState extends ConsumerState<_WeeklyReviewDialog> {
       3 => const _StepProjects(),
       4 => const _StepWaiting(),
       5 => const _StepCalendar(),
-      6 => const _StepClosing(),
+      6 => const _StepNoDueDate(),
+      7 => const _StepPendingInbox(),
+      8 => const _StepClosing(),
       _ => const SizedBox.shrink(),
     };
   }
@@ -554,30 +568,37 @@ class _StepTasks extends ConsumerWidget {
                      : 'Atrasada: ${DateFormat('dd/MM').format(t.dueDate!)}',
                   style: TextStyle(color: overdue ? Colors.red[400] : Colors.grey),
                 ),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.edit_calendar_rounded, size: 20),
-                      onPressed: () {
-                         showModalBottomSheet(
-                           context: context,
-                           isScrollControlled: true,
-                           builder: (ctx) => EditTaskSheet(task: t),
-                         );
-                         ref.read(weeklyReviewSessionProvider.notifier).incrementTasksReviewed();
-                      },
-                      tooltip: 'Editar/Adiar',
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.check_circle_outline, size: 20),
-                      onPressed: () async {
-                         await ref.read(tasksProvider.notifier).updateStatus(t.id, 'done');
-                         ref.read(weeklyReviewSessionProvider.notifier).incrementTasksReviewed();
-                      },
-                      tooltip: 'Concluir agora',
-                    ),
-                  ],
+                trailing: SizedBox(
+                  width: 88,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.edit_calendar_rounded, size: 20),
+                        onPressed: () {
+                           showModalBottomSheet(
+                             context: context,
+                             isScrollControlled: true,
+                             builder: (ctx) => EditTaskSheet(task: t),
+                           );
+                           ref.read(weeklyReviewSessionProvider.notifier).incrementTasksReviewed();
+                        },
+                        tooltip: 'Editar/Adiar',
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.check_circle_outline, size: 20),
+                        onPressed: () async {
+                           await ref.read(tasksProvider.notifier).updateStatus(t.id, 'done');
+                           ref.read(weeklyReviewSessionProvider.notifier).incrementTasksReviewed();
+                        },
+                        tooltip: 'Concluir agora',
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             );
@@ -760,6 +781,382 @@ class _StepCalendar extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+// ── Tarefas sem data ─────────────────────────────────────────
+
+class _StepNoDueDate extends ConsumerWidget {
+  const _StepNoDueDate();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tasksAsync = ref.watch(tasksProvider);
+
+    return tasksAsync.when(
+      data: (allTasks) {
+        final noDueTasks = allTasks
+            .where((t) => !t.isDone && !t.isSomeday && t.dueDate == null)
+            .toList();
+
+        if (noDueTasks.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.event_available_rounded,
+                    size: 56, color: AppColors.success.withValues(alpha: 0.5)),
+                const SizedBox(height: 16),
+                Text(
+                  'Todas as tarefas têm data!',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Seu sistema está bem organizado.',
+                  style: TextStyle(color: context.cTextMuted),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF06B6D4).withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(AppRadius.md),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.info_outline_rounded,
+                      size: 16, color: Color(0xFF06B6D4)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '${noDueTasks.length} tarefa(s) sem prazo. Defina uma data ou mova para "Algum dia".',
+                      style: const TextStyle(
+                          fontSize: 13, color: Color(0xFF06B6D4)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            Expanded(
+              child: ListView.separated(
+                itemCount: noDueTasks.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 6),
+                itemBuilder: (_, i) {
+                  final t = noDueTasks[i];
+                  return Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: context.isDark
+                          ? AppColors.surfaceVariantDark
+                          : AppColors.surfaceVariant,
+                      borderRadius: BorderRadius.circular(AppRadius.md),
+                      border: Border.all(
+                        color: context.isDark
+                            ? AppColors.borderDark
+                            : AppColors.border,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.radio_button_unchecked_rounded,
+                            size: 16, color: Colors.grey),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            t.title,
+                            style: const TextStyle(
+                                fontSize: 14, fontWeight: FontWeight.w500),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        // Botão Definir Data
+                        Tooltip(
+                          message: 'Definir data',
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(6),
+                            onTap: () async {
+                              final date = await showDatePicker(
+                                context: context,
+                                initialDate: DateTime.now()
+                                    .add(const Duration(days: 1)),
+                                firstDate: DateTime.now(),
+                                lastDate: DateTime.now()
+                                    .add(const Duration(days: 730)),
+                                helpText: 'Definir prazo',
+                                confirmText: 'Confirmar',
+                                cancelText: 'Cancelar',
+                              );
+                              if (date != null) {
+                                await ref
+                                    .read(tasksProvider.notifier)
+                                    .updateTaskDates(
+                                        t.id, t.startDate, date);
+                                ref
+                                    .read(weeklyReviewSessionProvider
+                                        .notifier)
+                                    .incrementTasksReviewed();
+                              }
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 5),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF06B6D4)
+                                    .withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.calendar_today_rounded,
+                                      size: 13, color: Color(0xFF06B6D4)),
+                                  SizedBox(width: 4),
+                                  Text('Data',
+                                      style: TextStyle(
+                                          fontSize: 12,
+                                          color: Color(0xFF06B6D4),
+                                          fontWeight: FontWeight.w600)),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        // Botão Algum Dia
+                        Tooltip(
+                          message: 'Mover para Algum Dia',
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(6),
+                            onTap: () async {
+                              await ref
+                                  .read(tasksProvider.notifier)
+                                  .setSomeday(t.id, true);
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 5),
+                              decoration: BoxDecoration(
+                                color: Colors.grey.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.cloud_queue_rounded,
+                                      size: 13, color: Colors.grey),
+                                  SizedBox(width: 4),
+                                  Text('Algum dia',
+                                      style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.grey,
+                                          fontWeight: FontWeight.w600)),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        );
+      },
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => Text('Erro: $e'),
+    );
+  }
+}
+
+// ── Inbox pendente (não processado) ───────────────────────────
+
+class _StepPendingInbox extends ConsumerWidget {
+  const _StepPendingInbox();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final inboxState = ref.watch(gtdInboxProvider);
+
+    return inboxState.when(
+      data: (items) {
+        if (items.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.mark_email_read_rounded,
+                    size: 56,
+                    color: AppColors.success.withValues(alpha: 0.5)),
+                const SizedBox(height: 16),
+                Text(
+                  'Inbox zerado!',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Todas as capturas foram processadas.',
+                  style: TextStyle(color: context.cTextMuted),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF8B5CF6).withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(AppRadius.md),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.inbox_rounded,
+                      size: 16, color: Color(0xFF8B5CF6)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '${items.length} captura(s) aguardando decisão. Converta em tarefa ou descarte.',
+                      style: const TextStyle(
+                          fontSize: 13, color: Color(0xFF8B5CF6)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            Expanded(
+              child: ListView.separated(
+                itemCount: items.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 8),
+                itemBuilder: (_, i) {
+                  final item = items[i];
+                  return Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: context.isDark
+                          ? AppColors.surfaceVariantDark
+                          : AppColors.surfaceVariant,
+                      borderRadius: BorderRadius.circular(AppRadius.md),
+                      border: Border.all(
+                        color: context.isDark
+                            ? AppColors.borderDark
+                            : AppColors.border,
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.notes_rounded,
+                                size: 15, color: Colors.grey),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                item.content,
+                                style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            // Botão Criar Tarefa
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                icon: const Icon(Icons.add_task_rounded,
+                                    size: 15),
+                                label: const Text('Criar Tarefa',
+                                    style: TextStyle(fontSize: 13)),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor:
+                                      const Color(0xFF8B5CF6),
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(
+                                      vertical: 8),
+                                  elevation: 0,
+                                ),
+                                onPressed: () => _convertToTask(
+                                    context, ref, item.content, item.id),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            // Botão Descartar
+                            OutlinedButton.icon(
+                              icon: const Icon(Icons.delete_outline_rounded,
+                                  size: 15, color: Colors.red),
+                              label: const Text('Descartar',
+                                  style: TextStyle(
+                                      fontSize: 13, color: Colors.red)),
+                              style: OutlinedButton.styleFrom(
+                                side: const BorderSide(
+                                    color: Colors.red, width: 1),
+                                padding: const EdgeInsets.symmetric(
+                                    vertical: 8, horizontal: 12),
+                              ),
+                              onPressed: () async {
+                                await ref
+                                    .read(gtdInboxProvider.notifier)
+                                    .markProcessed(item.id);
+                                ref
+                                    .read(weeklyReviewSessionProvider
+                                        .notifier)
+                                    .incrementInboxProcessed();
+                              },
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        );
+      },
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => Text('Erro: $e'),
+    );
+  }
+
+  Future<void> _convertToTask(
+      BuildContext context, WidgetRef ref, String content, String itemId) async {
+    await ref.read(gtdInboxProvider.notifier).markProcessed(itemId);
+    ref.read(weeklyReviewSessionProvider.notifier).incrementInboxProcessed();
+
+    final result =
+        await ref.read(tasksProvider.notifier).createTask(title: content);
+    if (result.error != null) return;
+
+    final tasks = ref.read(tasksProvider).valueOrNull ?? [];
+    final newTask = tasks.where((t) => t.id == result.id).firstOrNull;
+    if (newTask != null && context.mounted) {
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        builder: (ctx) => EditTaskSheet(task: newTask),
+      );
+    }
   }
 }
 

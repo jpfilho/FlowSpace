@@ -1,0 +1,55 @@
+# FlowSpace — AI Agent Instructions & Coding Rules (.cursorrules)
+
+Você é um assistente de IA especialista em Flutter, Dart e Supabase. Você está trabalhando no projeto **FlowSpace** — uma plataforma premium de produtividade e gestão.
+
+Antes de qualquer modificação, leia o arquivo [PROJECT_CONTEXT.md](file:///c:/aplicativos/gtd/PROJECT_CONTEXT.md) que descreve toda a arquitetura, tabelas de banco e design system do projeto.
+
+---
+
+## 1. Diretrizes de Comunicação
+- **Idioma**: Responda e comunique-se com o usuário sempre em **Português (pt-BR)**.
+- **Código**: Variáveis, nomes de classes, métodos, comentários de código e mensagens de log devem ser escritos em **Inglês**.
+
+---
+
+## 2. Tecnologias & Arquitetura
+- **Flutter**: Código multiplataforma limpo. SDK Dart `sdk: '>=3.3.0 <4.0.0'`.
+- **Gerenciamento de Estado**: Sempre use **Riverpod 2.x**.
+  - Defina lógica de estado assíncrono em `AsyncNotifier` ou `AutoDisposeAsyncNotifier`.
+  - Provedores centrais de dados estão localizados no arquivo [data_providers.dart](file:///c:/aplicativos/gtd/lib/features/auth/domain/data_providers.dart).
+- **Roteamento**: **GoRouter**. Siga a estrutura de caminhos definida em [app_routes.dart](file:///c:/aplicativos/gtd/lib/core/routing/app_routes.dart) e a árvore de rotas em [app_router.dart](file:///c:/aplicativos/gtd/lib/core/routing/app_router.dart).
+- **Banco de Dados**: **Supabase / PostgreSQL**.
+  - Não chame o cliente Supabase direto em widgets de UI. Mantenha as consultas encapsuladas em repositórios ou nos Notifiers do Riverpod.
+  - Mantenha políticas de RLS e triggers de banco de dados alinhadas ao fazer alterações.
+
+---
+
+## 3. Design System & UI Premium
+Você deve manter o apelo premium e a consistência visual do FlowSpace. Fique atento a:
+- **Cores & Temas**:
+  - **NUNCA** use cores brutas como `Colors.red`, `Colors.blue` ou códigos hexadecimais literais nos widgets.
+  - Use sempre as extensões de `BuildContext` expostas em [index.dart](file:///c:/aplicativos/gtd/lib/core/theme/index.dart) (ex: `context.cPrimary`, `context.cSurface`, `context.cBorder`, `context.cTextPrimary`, `context.cTextMuted`).
+  - Suporte total a temas Claro (`ThemeMode.light`) e Escuro (`ThemeMode.dark`).
+- **Espaçamento & Layout**:
+  - Use tokens de espaçamento do `AppSpacing` (ex: `AppSpacing.sp16`, `AppSpacing.sp8`) e bordas do `AppRadius` (ex: `AppRadius.lg` para 12px, `AppRadius.xl` para 16px).
+  - Respeite a responsividade usando o helper `Responsive` (`Responsive.isMobile`, `Responsive.isTablet`, `Responsive.isDesktop`).
+- **Micro-Animações**:
+  - Utilize `flutter_animate` para dar vida e interatividade refinada às telas (ex: transições, fade-ins de listas, interações de hover).
+
+---
+
+## 4. Padrões de Modificação de Código
+- **Importações**: Mantenha as importações organizadas. Importações relativas ou de pacotes devem seguir as convenções de linting padrão do Dart (`analysis_options.yaml`).
+- **Sync em Tempo Real (Realtime)**:
+  - Se você adicionar uma nova funcionalidade que precise sincronizar dados em tempo real, lembre-se de registrá-la e gerenciar suas inscrições em [RealtimeService](file:///c:/aplicativos/gtd/lib/core/services/realtime_service.dart) para invalidar o respectivo provider Riverpod.
+- **Tratamento de Erros e Loading**:
+  - Sempre exiba spinners ou esqueletos de carregamento e mensagens de erro amigáveis ao lidar com estados de `AsyncValue` (ex: `ref.watch(provider).when(...)`).
+
+---
+
+## 5. Fluxo de Trabalho (Planejar antes de Executar)
+1. **Analise**: Identifique onde a modificação deve ser feita (`core`, `features`, ou `shared`).
+2. **Revise**: Verifique se há providers existentes que já fornecem os dados ou se as tabelas Supabase necessárias já existem.
+3. **Escreva código limpo**: Respeite os padrões existentes de nomenclatura e responsabilidade única.
+4. **Verifique**: Se alterar models, certifique-se de executar o build_runner para recriar os arquivos `.g.dart` e `.freezed.dart`:
+   `flutter pub run build_runner build --delete-conflicting-outputs`

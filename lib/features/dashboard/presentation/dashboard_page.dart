@@ -108,8 +108,10 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(currentUserProvider);
-    final name = (user?.userMetadata?['name'] as String?)?.split(' ').first
-        ?? 'Usuário';
+    final name = ((user?.userMetadata?['name'] as String?)
+        ?? (user?.userMetadata?['full_name'] as String?)
+        ?? user?.email?.split('@').first
+        ?? 'Usuário').split(' ').first;
     final isDesktop = Responsive.isDesktop(context);
     final isTablet = Responsive.isTablet(context);
 

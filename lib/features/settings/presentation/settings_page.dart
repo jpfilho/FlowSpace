@@ -11,6 +11,7 @@ import '../../../core/theme/index.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../auth/domain/auth_provider.dart';
 import '../../auth/domain/data_providers.dart';
+import '../../ai_copilot/data/repositories/ai_repository.dart';
 
 // Providers autoDispose para dados de configurações
 final _profileProvider = FutureProvider.autoDispose<Map<String, dynamic>?>((ref) async {
@@ -190,6 +191,24 @@ class SettingsPage extends ConsumerWidget {
                     ),
                   ],
                 ).animate().fadeIn(delay: 200.ms),
+
+                const SizedBox(height: AppSpacing.sp20),
+
+                // ── INTELIGÊNCIA ARTIFICIAL (GEMINI) ───────────
+                _buildSection(
+                  context,
+                  'INTELIGÊNCIA ARTIFICIAL (GEMINI)',
+                  [
+                    _buildTile(
+                      context: context,
+                      icon: Icons.auto_awesome_rounded,
+                      iconColor: AppColors.primary,
+                      title: 'Copiloto IA (Configurações)',
+                      subtitle: 'Configurar chave de API e modelo',
+                      onTap: () => _showAiSettings(context, ref),
+                    ),
+                  ],
+                ).animate().fadeIn(delay: 220.ms),
 
                 const SizedBox(height: AppSpacing.sp20),
 
@@ -663,6 +682,111 @@ class SettingsPage extends ConsumerWidget {
     if (confirm == true && context.mounted) {
       await ref.read(authNotifierProvider.notifier).signOut();
     }
+  }
+
+  void _showAiSettings(BuildContext context, WidgetRef ref) async {
+    final service = ref.read(aiServiceProvider);
+    final currentKey = await service.getApiKey() ?? '';
+    final currentModel = await service.getModelName();
+
+    final keyCtrl = TextEditingController(text: currentKey);
+    String selectedModel = currentModel;
+
+    if (!context.mounted) return;
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        bool obscure = true;
+        return StatefulBuilder(
+          builder: (ctx, setState) {
+            return AlertDialog(
+              backgroundColor: context.isDark ? AppColors.surfaceDark : AppColors.surface,
+              title: Row(
+                children: [
+                  const Icon(Icons.auto_awesome_rounded, color: AppColors.primary),
+                  const SizedBox(width: 8),
+                  Text('Configurações do Copiloto IA', style: Theme.of(context).textTheme.titleLarge),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Forneça sua chave da API do Gemini para ativar os recursos inteligentes.',
+                    style: context.bodySm,
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: keyCtrl,
+                    obscureText: obscure,
+                    decoration: InputDecoration(
+                      labelText: 'Chave da API do Gemini',
+                      hintText: 'AIzaSy...',
+                      isDense: true,
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          obscure ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                          size: 18,
+                        ),
+                        onPressed: () => setState(() => obscure = !obscure),
+                      ),
+                    ),
+                    style: TextStyle(fontSize: 13, color: context.cTextPrimary),
+                  ),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    value: selectedModel,
+                    dropdownColor: context.isDark ? AppColors.surfaceDark : AppColors.surface,
+                    decoration: const InputDecoration(
+                      labelText: 'Modelo Gemini',
+                      isDense: true,
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 'gemini-1.5-flash', child: Text('Gemini 1.5 Flash (Rápido)')),
+                      DropdownMenuItem(value: 'gemini-2.5-flash', child: Text('Gemini 2.5 Flash (Médio/Recomendado)')),
+                    ],
+                    onChanged: (val) {
+                      if (val != null) {
+                        setState(() => selectedModel = val);
+                      }
+                    },
+                    style: TextStyle(fontSize: 13, color: context.cTextPrimary),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Cancelar'),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    final key = keyCtrl.text.trim();
+                    if (key.isEmpty) {
+                      await service.deleteApiKey();
+                    } else {
+                      await service.saveApiKey(key);
+                    }
+                    await service.saveModelName(selectedModel);
+                    
+                    if (ctx.mounted) {
+                      Navigator.pop(ctx);
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                        content: Text('Configurações de IA salvas!'),
+                        backgroundColor: AppColors.success,
+                      ));
+                    }
+                  },
+                  child: const Text('Salvar'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 }
 

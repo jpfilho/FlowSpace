@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/index.dart';
 import '../../auth/domain/data_providers.dart';
+import 'sla_dashboard_page.dart';
 
 // ── Report Data Providers ─────────────────────────────────────
 
@@ -77,12 +78,15 @@ final overdueTasksCountProvider =
 // REPORTS PAGE
 // ═══════════════════════════════════════════════════════════════
 
+final _reportsTabProvider = StateProvider<String>((ref) => 'general'); // general | sla
+
 class ReportsPage extends ConsumerWidget {
   const ReportsPage({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isDesktop = Responsive.isDesktop(context);
+    final tab = ref.watch(_reportsTabProvider);
 
     return Scaffold(
       backgroundColor: context.cBackground,
@@ -93,56 +97,167 @@ class ReportsPage extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // ── Page header ──────────────────────────────────
-            Row(children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [AppColors.primary, AppColors.accent],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(AppRadius.md),
+            Row(
+              children: [
+                Expanded(
+                  child: Row(children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [AppColors.primary, AppColors.accent],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(AppRadius.md),
+                      ),
+                      child: const Icon(Icons.analytics_rounded,
+                          color: Colors.white, size: 20),
+                    ),
+                    const SizedBox(width: AppSpacing.sp12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Reports & Analytics',
+                              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                  )),
+                          Text(
+                            tab == 'general'
+                                ? 'Visão geral da produtividade do workspace'
+                                : 'Análise de Acordos de Nível de Serviço (SLA)',
+                            style: context.bodySm,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ]),
                 ),
-                child: const Icon(Icons.analytics_rounded,
-                    color: Colors.white, size: 20),
-              ),
-              const SizedBox(width: AppSpacing.sp12),
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('Reports & Analytics',
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        )),
-                Text('Visão geral da produtividade do workspace',
-                    style: context.bodySm),
-              ]),
-            ]),
+                if (isDesktop) ...[
+                  const SizedBox(width: AppSpacing.sp16),
+                  _buildTabToggle(ref, tab),
+                ],
+              ],
+            ),
+            if (!isDesktop) ...[
+              const SizedBox(height: AppSpacing.sp16),
+              _buildTabToggle(ref, tab),
+            ],
             const SizedBox(height: AppSpacing.sp32),
 
-            // ── KPI Cards ─────────────────────────────────────
-            _KpiRow(),
-            const SizedBox(height: AppSpacing.sp32),
-
-            // ── Charts grid ──────────────────────────────────
-            isDesktop
-                ? Row(
+            // ── Tab Content ──────────────────────────────────
+            tab == 'general'
+                ? Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(child: _TasksByStatusChart()),
-                      const SizedBox(width: AppSpacing.sp20),
-                      Expanded(child: _TasksByPriorityChart()),
+                      // KPI Cards
+                      _KpiRow(),
+                      const SizedBox(height: AppSpacing.sp32),
+
+                      // Charts grid
+                      isDesktop
+                          ? Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(child: _TasksByStatusChart()),
+                                const SizedBox(width: AppSpacing.sp20),
+                                Expanded(child: _TasksByPriorityChart()),
+                              ],
+                            )
+                          : Column(children: [
+                              _TasksByStatusChart(),
+                              const SizedBox(height: AppSpacing.sp20),
+                              _TasksByPriorityChart(),
+                            ]),
+                      const SizedBox(height: AppSpacing.sp24),
+
+                      // Line chart: completions per day
+                      _CompletionsPerDayChart(),
                     ],
                   )
-                : Column(children: [
-                    _TasksByStatusChart(),
-                    const SizedBox(height: AppSpacing.sp20),
-                    _TasksByPriorityChart(),
-                  ]),
-            const SizedBox(height: AppSpacing.sp24),
+                : const SlaDashboard(),
+          ],
+        ),
+      ),
+    );
+  }
 
-            // ── Line chart: completions per day ────────────
-            _CompletionsPerDayChart(),
+  Widget _buildTabToggle(WidgetRef ref, String tab) {
+    return Container(
+      height: 38,
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: ref.context.isDark
+            ? AppColors.surfaceVariantDark
+            : AppColors.surfaceVariant,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _TabBtn(
+            icon: Icons.dashboard_customize_rounded,
+            label: 'Geral',
+            active: tab == 'general',
+            onTap: () => ref.read(_reportsTabProvider.notifier).state = 'general',
+          ),
+          _TabBtn(
+            icon: Icons.alarm_rounded,
+            label: 'SLA Analytics',
+            active: tab == 'sla',
+            onTap: () => ref.read(_reportsTabProvider.notifier).state = 'sla',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TabBtn extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+
+  const _TabBtn({
+    required this.icon,
+    required this.label,
+    required this.active,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: AppAnimations.fast,
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.sp12,
+          vertical: AppSpacing.sp6,
+        ),
+        decoration: BoxDecoration(
+          color: active
+              ? (context.isDark ? AppColors.surfaceDark : AppColors.surface)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+          boxShadow: active
+              ? [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 4)]
+              : null,
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 15,
+                color: active ? AppColors.primary : context.cTextMuted),
+            const SizedBox(width: 5),
+            Text(label,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: active ? FontWeight.w600 : FontWeight.w400,
+                  color: active ? AppColors.primary : context.cTextMuted,
+                )),
           ],
         ),
       ),
