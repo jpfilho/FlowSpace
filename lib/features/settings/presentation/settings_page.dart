@@ -16,6 +16,8 @@ import '../../ai_copilot/domain/models/ai_agent_models.dart';
 import '../../ai_copilot/domain/services/ai_prompt_defaults.dart';
 import '../../ai_copilot/domain/services/ai_prompt_builder.dart';
 import '../../ai_copilot/data/repositories/ai_prompt_config_repository.dart';
+import '../../ai_copilot/presentation/ai_copilot_dashboard_page.dart';
+
 
 // Providers autoDispose para dados de configurações
 final _profileProvider = FutureProvider.autoDispose<Map<String, dynamic>?>((ref) async {
@@ -695,12 +697,21 @@ class SettingsPage extends ConsumerWidget {
     final currentKey = await service.getApiKey() ?? '';
     final currentModel = await service.getModelName();
 
-    final taskConfig = await promptRepo.getAgentConfig(AiAgentType.taskRiskAnalysis);
-    final weeklyConfig = await promptRepo.getAgentConfig(AiAgentType.weeklyExecutiveReport);
+    final taskConfigs = await promptRepo.getAgentConfigs(AiAgentType.taskRiskAnalysis);
+    final weeklyConfigs = await promptRepo.getAgentConfigs(AiAgentType.weeklyExecutiveReport);
 
     final keyCtrl = TextEditingController(text: currentKey);
+
+    final List<AiAgentConfig> taskAgentConfigs = List.from(taskConfigs);
+    final List<AiAgentConfig> weeklyAgentConfigs = List.from(weeklyConfigs);
+    final List<AiAgentConfig> configsToDelete = [];
+
+    String selectedTaskPromptName = 'Padrão';
+    String selectedWeeklyPromptName = 'Padrão';
+
+    final initialTargetConfig = taskAgentConfigs.firstWhere((c) => c.name == 'Padrão', orElse: () => taskAgentConfigs.first);
     final instructionsCtrl = TextEditingController(
-      text: taskConfig.getCombinedText(),
+      text: initialTargetConfig.getCombinedText(),
     );
     
     // Safety check: if old model is Gemini, fallback to gpt-4o-mini
@@ -708,8 +719,6 @@ class SettingsPage extends ConsumerWidget {
     String selectedModel = allowedModels.contains(currentModel) ? currentModel : 'gpt-4o-mini';
 
     AiAgentType selectedAgent = AiAgentType.taskRiskAnalysis;
-    AiAgentConfig taskAgentConfig = taskConfig;
-    AiAgentConfig weeklyAgentConfig = weeklyConfig;
 
     if (!context.mounted) return;
 
@@ -719,6 +728,13 @@ class SettingsPage extends ConsumerWidget {
         bool obscure = true;
         return StatefulBuilder(
           builder: (ctx, setState) {
+            final activeName = selectedAgent == AiAgentType.taskRiskAnalysis 
+                ? selectedTaskPromptName 
+                : selectedWeeklyPromptName;
+            final currentConfigs = selectedAgent == AiAgentType.taskRiskAnalysis 
+                ? taskAgentConfigs 
+                : weeklyAgentConfigs;
+
             return AlertDialog(
               backgroundColor: context.isDark ? AppColors.surfaceDark : AppColors.surface,
               title: Row(
@@ -803,30 +819,217 @@ class SettingsPage extends ConsumerWidget {
                         }).toList(),
                         onChanged: (val) {
                           if (val != null && val != selectedAgent) {
-                            // 1. Save current controller text to old agent config
+                            // 1. Save current controller text to memory config
+                            final activeName = selectedAgent == AiAgentType.taskRiskAnalysis 
+                                ? selectedTaskPromptName 
+                                : selectedWeeklyPromptName;
                             final currentConfig = AiAgentConfig(
                               agentType: selectedAgent,
+                              name: activeName,
                               systemInstruction: instructionsCtrl.text,
                               businessRules: '',
                               toneOfVoice: '',
                               avoidRules: '',
                               examples: '',
                             );
+                            
                             if (selectedAgent == AiAgentType.taskRiskAnalysis) {
-                              taskAgentConfig = currentConfig;
+                              final idx = taskAgentConfigs.indexWhere((c) => c.name == activeName);
+                              if (idx != -1) taskAgentConfigs[idx] = currentConfig;
                             } else {
-                              weeklyAgentConfig = currentConfig;
+                              final idx = weeklyAgentConfigs.indexWhere((c) => c.name == activeName);
+                              if (idx != -1) weeklyAgentConfigs[idx] = currentConfig;
                             }
                             
                             // 2. Switch agent and load new controller text
                             setState(() {
                               selectedAgent = val;
-                              final newConfig = val == AiAgentType.taskRiskAnalysis ? taskAgentConfig : weeklyAgentConfig;
-                              instructionsCtrl.text = newConfig.getCombinedText();
+                              final newConfigs = val == AiAgentType.taskRiskAnalysis ? taskAgentConfigs : weeklyAgentConfigs;
+                              final nextName = val == AiAgentType.taskRiskAnalysis ? selectedTaskPromptName : selectedWeeklyPromptName;
+                              final targetConfig = newConfigs.firstWhere((c) => c.name == nextName, orElse: () => newConfigs.first);
+                              instructionsCtrl.text = targetConfig.getCombinedText();
                             });
                           }
                         },
                         style: TextStyle(fontSize: 13, color: context.cTextPrimary),
+                      ),
+                      const SizedBox(height: 16),
+
+                      Row(
+                        children: [
+                          Expanded(
+                            child: DropdownButtonFormField<String>(
+                              value: activeName,
+                              dropdownColor: context.isDark ? AppColors.surfaceDark : AppColors.surface,
+                              decoration: const InputDecoration(
+                                labelText: 'Template de Prompt Utilizado',
+                                isDense: true,
+                              ),
+                              items: [
+                                ...currentConfigs.map((c) => DropdownMenuItem(value: c.name, child: Text(c.name))),
+                                const DropdownMenuItem(
+                                  value: '__create_new__',
+                                  child: Text('➕ Criar Novo Prompt...', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
+                                ),
+                              ],
+                              onChanged: (val) async {
+                                final activeName = selectedAgent == AiAgentType.taskRiskAnalysis 
+                                    ? selectedTaskPromptName 
+                                    : selectedWeeklyPromptName;
+                                    
+                                if (val == '__create_new__') {
+                                  final nameCtrl = TextEditingController();
+                                  final newName = await showDialog<String>(
+                                    context: context,
+                                    builder: (ctx) => AlertDialog(
+                                      backgroundColor: context.isDark ? AppColors.surfaceDark : AppColors.surface,
+                                      title: const Text('Criar Novo Prompt'),
+                                      content: TextField(
+                                        controller: nameCtrl,
+                                        decoration: const InputDecoration(
+                                          labelText: 'Nome do Prompt (ex: SLA Crítico)',
+                                          hintText: 'Digite o nome do prompt...',
+                                        ),
+                                        autofocus: true,
+                                      ),
+                                      actions: [
+                                        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+                                        TextButton(
+                                          onPressed: () {
+                                            final name = nameCtrl.text.trim();
+                                            if (name.isNotEmpty) {
+                                              Navigator.pop(ctx, name);
+                                            }
+                                          },
+                                          child: const Text('Criar'),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+
+                                  if (newName != null && newName.isNotEmpty) {
+                                    final currentConfigs = selectedAgent == AiAgentType.taskRiskAnalysis ? taskAgentConfigs : weeklyAgentConfigs;
+                                    if (currentConfigs.any((c) => c.name.toLowerCase() == newName.toLowerCase())) {
+                                      if (context.mounted) {
+                                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                                          content: Text('Já existe um prompt com este nome.'),
+                                          backgroundColor: AppColors.error,
+                                        ));
+                                      }
+                                      return;
+                                    }
+                                    final defaults = AiPromptDefaults.getDefaultConfig(selectedAgent);
+                                    final newConfig = defaults.copyWith(name: newName, businessRules: '', toneOfVoice: '', avoidRules: '', examples: '');
+                                    
+                                    // Save currently active config to memory before switching
+                                    final activeConfig = AiAgentConfig(
+                                      agentType: selectedAgent,
+                                      name: activeName,
+                                      systemInstruction: instructionsCtrl.text,
+                                      businessRules: '',
+                                      toneOfVoice: '',
+                                      avoidRules: '',
+                                      examples: '',
+                                    );
+                                    
+                                    setState(() {
+                                      if (selectedAgent == AiAgentType.taskRiskAnalysis) {
+                                        final idx = taskAgentConfigs.indexWhere((c) => c.name == activeName);
+                                        if (idx != -1) taskAgentConfigs[idx] = activeConfig;
+                                        
+                                        taskAgentConfigs.add(newConfig);
+                                        selectedTaskPromptName = newName;
+                                      } else {
+                                        final idx = weeklyAgentConfigs.indexWhere((c) => c.name == activeName);
+                                        if (idx != -1) weeklyAgentConfigs[idx] = activeConfig;
+                                        
+                                        weeklyAgentConfigs.add(newConfig);
+                                        selectedWeeklyPromptName = newName;
+                                      }
+                                      instructionsCtrl.text = newConfig.getCombinedText();
+                                    });
+                                  }
+                                } else if (val != null) {
+                                  // Save current text in text field to active config in memory before switching
+                                  final activeConfig = AiAgentConfig(
+                                    agentType: selectedAgent,
+                                    name: activeName,
+                                    systemInstruction: instructionsCtrl.text,
+                                    businessRules: '',
+                                    toneOfVoice: '',
+                                    avoidRules: '',
+                                    examples: '',
+                                  );
+                                  
+                                  setState(() {
+                                    if (selectedAgent == AiAgentType.taskRiskAnalysis) {
+                                      final idx = taskAgentConfigs.indexWhere((c) => c.name == activeName);
+                                      if (idx != -1) taskAgentConfigs[idx] = activeConfig;
+                                      
+                                      selectedTaskPromptName = val;
+                                      final targetConfig = taskAgentConfigs.firstWhere((c) => c.name == val);
+                                      instructionsCtrl.text = targetConfig.getCombinedText();
+                                    } else {
+                                      final idx = weeklyAgentConfigs.indexWhere((c) => c.name == activeName);
+                                      if (idx != -1) weeklyAgentConfigs[idx] = activeConfig;
+                                      
+                                      selectedWeeklyPromptName = val;
+                                      final targetConfig = weeklyAgentConfigs.firstWhere((c) => c.name == val);
+                                      instructionsCtrl.text = targetConfig.getCombinedText();
+                                    }
+                                  });
+                                }
+                              },
+                              style: TextStyle(fontSize: 13, color: context.cTextPrimary),
+                            ),
+                          ),
+                          if (activeName != 'Padrão') ...[
+                            const SizedBox(width: 8),
+                            IconButton(
+                              icon: const Icon(Icons.delete_outline_rounded, color: AppColors.error),
+                              tooltip: 'Excluir este prompt',
+                              onPressed: () async {
+                                final confirm = await showDialog<bool>(
+                                  context: context,
+                                  builder: (ctx) => AlertDialog(
+                                    backgroundColor: context.isDark ? AppColors.surfaceDark : AppColors.surface,
+                                    title: const Text('Excluir Prompt'),
+                                    content: Text('Deseja realmente excluir o prompt "$activeName"?'),
+                                    actions: [
+                                      TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Não')),
+                                      TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Sim')),
+                                    ],
+                                  ),
+                                );
+                                if (confirm == true) {
+                                  final targetList = selectedAgent == AiAgentType.taskRiskAnalysis ? taskAgentConfigs : weeklyAgentConfigs;
+                                  final toRemove = targetList.firstWhere((c) => c.name == activeName);
+                                  
+                                  setState(() {
+                                    configsToDelete.add(toRemove);
+                                    targetList.remove(toRemove);
+                                    if (selectedAgent == AiAgentType.taskRiskAnalysis) {
+                                      selectedTaskPromptName = 'Padrão';
+                                      final targetConfig = taskAgentConfigs.firstWhere((c) => c.name == 'Padrão');
+                                      instructionsCtrl.text = targetConfig.getCombinedText();
+                                    } else {
+                                      selectedWeeklyPromptName = 'Padrão';
+                                      final targetConfig = weeklyAgentConfigs.firstWhere((c) => c.name == 'Padrão');
+                                      instructionsCtrl.text = targetConfig.getCombinedText();
+                                    }
+                                  });
+                                  
+                                  if (ctx.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                      content: Text('Prompt "$activeName" marcado para exclusão ao salvar.'),
+                                      backgroundColor: AppColors.success,
+                                    ));
+                                  }
+                                }
+                              },
+                            ),
+                          ],
+                        ],
                       ),
                       const SizedBox(height: 16),
                       
@@ -857,7 +1060,7 @@ class SettingsPage extends ConsumerWidget {
                         ),
                       ),
                       const SizedBox(height: 16),
-
+ 
                       TextField(
                         controller: instructionsCtrl,
                         maxLines: 15,
@@ -883,7 +1086,7 @@ class SettingsPage extends ConsumerWidget {
                                 builder: (ctx) => AlertDialog(
                                   backgroundColor: context.isDark ? AppColors.surfaceDark : AppColors.surface,
                                   title: const Text('Confirmar Restauração'),
-                                  content: Text('Deseja restaurar as configurações padrão de "${selectedAgent.nameString}"?'),
+                                  content: Text('Deseja restaurar as configurações padrão de "${selectedAgent.nameString}" - "$activeName"?'),
                                   actions: [
                                     TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Não')),
                                     TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Sim')),
@@ -891,19 +1094,21 @@ class SettingsPage extends ConsumerWidget {
                                 ),
                               );
                               if (confirm == true) {
-                                await promptRepo.resetAgentConfig(selectedAgent);
-                                final defaults = AiPromptDefaults.getDefaultConfig(selectedAgent);
+                                await promptRepo.resetAgentConfig(selectedAgent, name: activeName);
+                                final defaults = AiPromptDefaults.getDefaultConfig(selectedAgent).copyWith(name: activeName);
                                 setState(() {
                                   if (selectedAgent == AiAgentType.taskRiskAnalysis) {
-                                    taskAgentConfig = defaults;
+                                    final idx = taskAgentConfigs.indexWhere((c) => c.name == activeName);
+                                    if (idx != -1) taskAgentConfigs[idx] = defaults;
                                   } else {
-                                    weeklyAgentConfig = defaults;
+                                    final idx = weeklyAgentConfigs.indexWhere((c) => c.name == activeName);
+                                    if (idx != -1) weeklyAgentConfigs[idx] = defaults;
                                   }
                                   instructionsCtrl.text = defaults.getCombinedText();
                                 });
                                 if (ctx.mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                    content: Text('Prompt de "${selectedAgent.nameString}" restaurado para o padrão!'),
+                                    content: Text('Prompt de "${selectedAgent.nameString}" ($activeName) restaurado para o padrão!'),
                                     backgroundColor: AppColors.success,
                                   ));
                                 }
@@ -916,6 +1121,7 @@ class SettingsPage extends ConsumerWidget {
                             onPressed: () {
                               final currentConfig = AiAgentConfig(
                                 agentType: selectedAgent,
+                                name: activeName,
                                 systemInstruction: instructionsCtrl.text,
                                 businessRules: '',
                                 toneOfVoice: '',
@@ -1013,6 +1219,7 @@ class SettingsPage extends ConsumerWidget {
                     final currentCombinedText = instructionsCtrl.text;
                     final updatedConfig = AiAgentConfig(
                       agentType: selectedAgent,
+                      name: activeName,
                       systemInstruction: currentCombinedText,
                       businessRules: '',
                       toneOfVoice: '',
@@ -1020,19 +1227,32 @@ class SettingsPage extends ConsumerWidget {
                       examples: '',
                     );
                     if (selectedAgent == AiAgentType.taskRiskAnalysis) {
-                      taskAgentConfig = updatedConfig;
+                      final idx = taskAgentConfigs.indexWhere((c) => c.name == activeName);
+                      if (idx != -1) taskAgentConfigs[idx] = updatedConfig;
                     } else {
-                      weeklyAgentConfig = updatedConfig;
+                      final idx = weeklyAgentConfigs.indexWhere((c) => c.name == activeName);
+                      if (idx != -1) weeklyAgentConfigs[idx] = updatedConfig;
                     }
 
                     // 2. Save both configs to Supabase
                     try {
-                      await promptRepo.saveAgentConfig(taskAgentConfig);
-                      await promptRepo.saveAgentConfig(weeklyAgentConfig);
+                      // Perform deletions
+                      for (final config in configsToDelete) {
+                        if (config.name != 'Padrão') {
+                          await promptRepo.deleteAgentConfig(config.agentType, config.name);
+                        }
+                      }
+                      // Perform updates/saves
+                      for (final config in taskAgentConfigs) {
+                        await promptRepo.saveAgentConfig(config);
+                      }
+                      for (final config in weeklyAgentConfigs) {
+                        await promptRepo.saveAgentConfig(config);
+                      }
                     } catch (e) {
                       if (ctx.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                          content: Text('Erro ao salvar promts no Supabase: $e'),
+                          content: Text('Erro ao salvar prompts no Supabase: $e'),
                           backgroundColor: AppColors.error,
                         ));
                       }
@@ -1048,6 +1268,9 @@ class SettingsPage extends ConsumerWidget {
                     }
                     await service.saveModelName(selectedModel);
                     
+                    // Invalidate configs list provider
+                    ref.invalidate(aiWeeklyReportConfigsProvider);
+
                     if (ctx.mounted) {
                       Navigator.pop(ctx);
                       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(

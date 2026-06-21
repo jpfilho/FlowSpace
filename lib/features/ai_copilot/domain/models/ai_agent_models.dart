@@ -10,6 +10,7 @@ enum AiAgentType {
 
 class AiAgentConfig {
   final AiAgentType agentType;
+  final String name;
   final String systemInstruction;
   final String businessRules;
   final String toneOfVoice;
@@ -18,6 +19,7 @@ class AiAgentConfig {
 
   const AiAgentConfig({
     required this.agentType,
+    this.name = 'Padrão',
     required this.systemInstruction,
     required this.businessRules,
     required this.toneOfVoice,
@@ -53,6 +55,7 @@ class AiAgentConfig {
   Map<String, dynamic> toJson() {
     return {
       'agentType': agentType.name,
+      'name': name,
       'systemInstruction': systemInstruction,
       'businessRules': businessRules,
       'toneOfVoice': toneOfVoice,
@@ -67,6 +70,7 @@ class AiAgentConfig {
         (e) => e.name == json['agentType'],
         orElse: () => AiAgentType.taskRiskAnalysis,
       ),
+      name: json['name'] as String? ?? 'Padrão',
       systemInstruction: json['systemInstruction'] as String? ?? '',
       businessRules: json['businessRules'] as String? ?? '',
       toneOfVoice: json['toneOfVoice'] as String? ?? '',
@@ -77,6 +81,7 @@ class AiAgentConfig {
 
   AiAgentConfig copyWith({
     AiAgentType? agentType,
+    String? name,
     String? systemInstruction,
     String? businessRules,
     String? toneOfVoice,
@@ -85,6 +90,7 @@ class AiAgentConfig {
   }) {
     return AiAgentConfig(
       agentType: agentType ?? this.agentType,
+      name: name ?? this.name,
       systemInstruction: systemInstruction ?? this.systemInstruction,
       businessRules: businessRules ?? this.businessRules,
       toneOfVoice: toneOfVoice ?? this.toneOfVoice,

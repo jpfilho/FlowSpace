@@ -8,8 +8,15 @@ import '../../../../shared/widgets/common/flow_button.dart';
 import '../../../../shared/widgets/common/skeleton.dart';
 import '../../auth/domain/data_providers.dart';
 import '../domain/models/ai_copilot_models.dart';
+import '../domain/models/ai_agent_models.dart';
 import '../data/repositories/ai_repository.dart';
+import '../data/repositories/ai_prompt_config_repository.dart';
 import 'widgets/ai_task_copilot_card.dart';
+
+final aiWeeklyReportConfigsProvider = FutureProvider.autoDispose<List<AiAgentConfig>>((ref) async {
+  final repo = ref.watch(aiPromptConfigRepositoryProvider);
+  return repo.getAgentConfigs(AiAgentType.weeklyExecutiveReport);
+});
 
 class AiCopilotDashboardPage extends ConsumerStatefulWidget {
   const AiCopilotDashboardPage({super.key});
@@ -51,7 +58,7 @@ class _AiCopilotDashboardPageState extends ConsumerState<AiCopilotDashboardPage>
     }
   }
 
-  Future<void> _generateWeeklyReport(List<TaskData> tasks) async {
+  Future<void> _generateWeeklyReport(List<TaskData> tasks, {String promptName = 'Padrão'}) async {
     setState(() {
       _generatingReport = true;
       _apiError = null;
@@ -59,7 +66,8 @@ class _AiCopilotDashboardPageState extends ConsumerState<AiCopilotDashboardPage>
 
     try {
       final aiService = ref.read(aiServiceProvider);
-      final report = await aiService.generateWeeklyReport(allTasks: tasks);
+      final report = await aiService.generateWeeklyReport(allTasks: tasks, promptName: promptName);
+
       
       setState(() {
         _weeklyReport = report;
@@ -310,34 +318,51 @@ ${_weeklyReport!.dataQualityNotes}
                         borderRadius: BorderRadius.circular(AppRadius.lg),
                         border: Border.all(color: AppColors.primary.withValues(alpha: 0.15)),
                       ),
-                      child: Row(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Resumo Executivo Semanal',
-                                  style: context.bodyMd.copyWith(fontWeight: FontWeight.w700, fontSize: 16),
-                                ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  'Consolide todas as tarefas em aberto e concluídas em um relatório de alto nível estruturado pela IA para reuniões de alinhamento.',
-                                  style: context.bodySm.copyWith(color: context.cTextMuted),
-                                ),
-                              ],
-                            ),
+                          Text(
+                            'Resumo Executivo Semanal',
+                            style: context.bodyMd.copyWith(fontWeight: FontWeight.w700, fontSize: 16),
                           ),
-                          const SizedBox(width: 16),
-                          FlowButton(
-                            label: _generatingReport ? 'Gerando...' : 'Gerar Relatório',
-                            leadingIcon: Icons.bolt_rounded,
-                            onPressed: _generatingReport || _apiError != null
-                                ? null
-                                : () => _generateWeeklyReport(allTasks),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Consolide todas as tarefas em aberto e concluídas em um relatório de alto nível estruturado pela IA para reuniões de alinhamento.',
+                            style: context.bodySm.copyWith(color: context.cTextMuted),
+                          ),
+                          const SizedBox(height: AppSpacing.sp16),
+                          ref.watch(aiWeeklyReportConfigsProvider).when(
+                            data: (configs) {
+                              return Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: configs.map((config) {
+                                  return FlowButton(
+                                    label: _generatingReport ? 'Gerando...' : 'Gerar Relatório (${config.name})',
+                                    leadingIcon: Icons.bolt_rounded,
+                                    onPressed: _generatingReport || _apiError != null
+                                        ? null
+                                        : () => _generateWeeklyReport(allTasks, promptName: config.name),
+                                  );
+                                }).toList(),
+                              );
+                            },
+                            loading: () => const SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+                            ),
+                            error: (e, _) => FlowButton(
+                              label: _generatingReport ? 'Gerando...' : 'Gerar Relatório (Padrão)',
+                              leadingIcon: Icons.bolt_rounded,
+                              onPressed: _generatingReport || _apiError != null
+                                  ? null
+                                  : () => _generateWeeklyReport(allTasks, promptName: 'Padrão'),
+                            ),
                           ),
                         ],
                       ),
+
                     ),
                     const SizedBox(height: AppSpacing.sp24),
 

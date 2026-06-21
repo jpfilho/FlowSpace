@@ -143,9 +143,10 @@ class AiService {
   /// Generates the Weekly Executive Report using all tasks
   Future<AiWeeklyReport> generateWeeklyReport({
     required List<TaskData> allTasks,
+    String promptName = 'Padrão',
   }) async {
     final repo = _ref.read(aiPromptConfigRepositoryProvider);
-    final config = await repo.getAgentConfig(AiAgentType.weeklyExecutiveReport);
+    final config = await repo.getAgentConfig(AiAgentType.weeklyExecutiveReport, name: promptName);
 
     final prompt = AiPromptBuilder.buildWeeklyReportPrompt(
       allTasks: allTasks,
