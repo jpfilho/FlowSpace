@@ -4,7 +4,7 @@ import '../../../auth/domain/auth_provider.dart';
 import '../../domain/models/ai_copilot_models.dart';
 import '../../domain/services/ai_service.dart';
 
-final aiServiceProvider = Provider<AiService>((ref) => AiService());
+final aiServiceProvider = Provider<AiService>((ref) => AiService(ref));
 
 final aiRepositoryProvider = Provider<AiRepository>((ref) {
   return AiRepository(ref);

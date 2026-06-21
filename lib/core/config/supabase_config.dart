@@ -1,7 +1,7 @@
 /// FlowSpace — Supabase Configuration
 abstract class SupabaseConfig {
   /// Local Supabase URL (running on this machine via Docker)
-  static const String url = 'http://2.24.200.178:8001';
+  static const String url = 'https://srv1588658.hstgr.cloud';
 
   /// Anon key for local Supabase instance
   static const String anonKey =

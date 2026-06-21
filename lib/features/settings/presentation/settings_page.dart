@@ -12,6 +12,10 @@ import '../../../core/providers/app_providers.dart';
 import '../../auth/domain/auth_provider.dart';
 import '../../auth/domain/data_providers.dart';
 import '../../ai_copilot/data/repositories/ai_repository.dart';
+import '../../ai_copilot/domain/models/ai_agent_models.dart';
+import '../../ai_copilot/domain/services/ai_prompt_defaults.dart';
+import '../../ai_copilot/domain/services/ai_prompt_builder.dart';
+import '../../ai_copilot/data/repositories/ai_prompt_config_repository.dart';
 
 // Providers autoDispose para dados de configurações
 final _profileProvider = FutureProvider.autoDispose<Map<String, dynamic>?>((ref) async {
@@ -194,10 +198,10 @@ class SettingsPage extends ConsumerWidget {
 
                 const SizedBox(height: AppSpacing.sp20),
 
-                // ── INTELIGÊNCIA ARTIFICIAL (GEMINI) ───────────
+                // ── INTELIGÊNCIA ARTIFICIAL (CHATGPT) ───────────
                 _buildSection(
                   context,
-                  'INTELIGÊNCIA ARTIFICIAL (GEMINI)',
+                  'INTELIGÊNCIA ARTIFICIAL (CHATGPT/OPENAI)',
                   [
                     _buildTile(
                       context: context,
@@ -686,15 +690,32 @@ class SettingsPage extends ConsumerWidget {
 
   void _showAiSettings(BuildContext context, WidgetRef ref) async {
     final service = ref.read(aiServiceProvider);
+    final promptRepo = ref.read(aiPromptConfigRepositoryProvider);
+
     final currentKey = await service.getApiKey() ?? '';
     final currentModel = await service.getModelName();
 
+    final taskConfig = await promptRepo.getAgentConfig(AiAgentType.taskRiskAnalysis);
+    final weeklyConfig = await promptRepo.getAgentConfig(AiAgentType.weeklyExecutiveReport);
+
     final keyCtrl = TextEditingController(text: currentKey);
-    String selectedModel = currentModel;
+    final personaCtrl = TextEditingController(text: taskConfig.systemInstruction);
+    final rulesCtrl = TextEditingController(text: taskConfig.businessRules);
+    final toneCtrl = TextEditingController(text: taskConfig.toneOfVoice);
+    final avoidCtrl = TextEditingController(text: taskConfig.avoidRules);
+    final examplesCtrl = TextEditingController(text: taskConfig.examples);
+    
+    // Safety check: if old model is Gemini, fallback to gpt-4o-mini
+    final allowedModels = ['gpt-4o-mini', 'gpt-4o'];
+    String selectedModel = allowedModels.contains(currentModel) ? currentModel : 'gpt-4o-mini';
+
+    AiAgentType selectedAgent = AiAgentType.taskRiskAnalysis;
+    AiAgentConfig taskAgentConfig = taskConfig;
+    AiAgentConfig weeklyAgentConfig = weeklyConfig;
 
     if (!context.mounted) return;
 
-    showDialog(
+    await showDialog(
       context: context,
       builder: (ctx) {
         bool obscure = true;
@@ -709,52 +730,330 @@ class SettingsPage extends ConsumerWidget {
                   Text('Configurações do Copiloto IA', style: Theme.of(context).textTheme.titleLarge),
                 ],
               ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Forneça sua chave da API do Gemini para ativar os recursos inteligentes.',
-                    style: context.bodySm,
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: keyCtrl,
-                    obscureText: obscure,
-                    decoration: InputDecoration(
-                      labelText: 'Chave da API do Gemini',
-                      hintText: 'AIzaSy...',
-                      isDense: true,
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          obscure ? Icons.visibility_off_rounded : Icons.visibility_rounded,
-                          size: 18,
-                        ),
-                        onPressed: () => setState(() => obscure = !obscure),
+              content: SizedBox(
+                width: 600,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Forneça sua chave da API da OpenAI (ChatGPT) para ativar os recursos inteligentes.',
+                        style: context.bodySm.copyWith(color: context.cTextMuted),
                       ),
-                    ),
-                    style: TextStyle(fontSize: 13, color: context.cTextPrimary),
-                  ),
-                  const SizedBox(height: 16),
-                  DropdownButtonFormField<String>(
-                    value: selectedModel,
-                    dropdownColor: context.isDark ? AppColors.surfaceDark : AppColors.surface,
-                    decoration: const InputDecoration(
-                      labelText: 'Modelo Gemini',
-                      isDense: true,
-                    ),
-                    items: const [
-                      DropdownMenuItem(value: 'gemini-1.5-flash', child: Text('Gemini 1.5 Flash (Rápido)')),
-                      DropdownMenuItem(value: 'gemini-2.5-flash', child: Text('Gemini 2.5 Flash (Médio/Recomendado)')),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: keyCtrl,
+                        obscureText: obscure,
+                        decoration: InputDecoration(
+                          labelText: 'Chave da API da OpenAI',
+                          hintText: 'sk-...',
+                          isDense: true,
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              obscure ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                              size: 18,
+                            ),
+                            onPressed: () => setState(() => obscure = !obscure),
+                          ),
+                        ),
+                        style: TextStyle(fontSize: 13, color: context.cTextPrimary),
+                      ),
+                      const SizedBox(height: 16),
+                      DropdownButtonFormField<String>(
+                        value: selectedModel,
+                        dropdownColor: context.isDark ? AppColors.surfaceDark : AppColors.surface,
+                        decoration: const InputDecoration(
+                          labelText: 'Modelo ChatGPT',
+                          isDense: true,
+                        ),
+                        items: const [
+                          DropdownMenuItem(value: 'gpt-4o-mini', child: Text('GPT-4o Mini (Rápido/Recomendado)')),
+                          DropdownMenuItem(value: 'gpt-4o', child: Text('GPT-4o (Alta Capacidade)')),
+                        ],
+                        onChanged: (val) {
+                          if (val != null) {
+                            setState(() => selectedModel = val);
+                          }
+                        },
+                        style: TextStyle(fontSize: 13, color: context.cTextPrimary),
+                      ),
+                      
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 16.0),
+                        child: Divider(),
+                      ),
+                      
+                      Text(
+                        'Assistentes de IA',
+                        style: context.bodyMd.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                      const SizedBox(height: 8),
+                      
+                      DropdownButtonFormField<AiAgentType>(
+                        value: selectedAgent,
+                        dropdownColor: context.isDark ? AppColors.surfaceDark : AppColors.surface,
+                        decoration: const InputDecoration(
+                          labelText: 'Selecione o Assistente para Customizar',
+                          isDense: true,
+                        ),
+                        items: AiAgentType.values.map((type) {
+                          return DropdownMenuItem(
+                            value: type,
+                            child: Text(type.nameString),
+                          );
+                        }).toList(),
+                        onChanged: (val) {
+                          if (val != null && val != selectedAgent) {
+                            // 1. Save current controller text to old agent config
+                            final currentConfig = AiAgentConfig(
+                              agentType: selectedAgent,
+                              systemInstruction: personaCtrl.text,
+                              businessRules: rulesCtrl.text,
+                              toneOfVoice: toneCtrl.text,
+                              avoidRules: avoidCtrl.text,
+                              examples: examplesCtrl.text,
+                            );
+                            if (selectedAgent == AiAgentType.taskRiskAnalysis) {
+                              taskAgentConfig = currentConfig;
+                            } else {
+                              weeklyAgentConfig = currentConfig;
+                            }
+                            
+                            // 2. Switch agent and load new controller text
+                            setState(() {
+                              selectedAgent = val;
+                              final newConfig = val == AiAgentType.taskRiskAnalysis ? taskAgentConfig : weeklyAgentConfig;
+                              personaCtrl.text = newConfig.systemInstruction;
+                              rulesCtrl.text = newConfig.businessRules;
+                              toneCtrl.text = newConfig.toneOfVoice;
+                              avoidCtrl.text = newConfig.avoidRules;
+                              examplesCtrl.text = newConfig.examples;
+                            });
+                          }
+                        },
+                        style: TextStyle(fontSize: 13, color: context.cTextPrimary),
+                      ),
+                      const SizedBox(height: 16),
+                      
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(AppRadius.sm),
+                          border: Border.all(color: AppColors.primary.withValues(alpha: 0.15)),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Icon(Icons.info_outline, size: 16, color: AppColors.primary),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Aviso: Você está personalizando o comportamento corporativo do assistente. '
+                                'A estrutura técnica de saída (JSON) é mantida fixa pelo sistema '
+                                'para garantir que o aplicativo funcione sem quebras.',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: context.isDark ? Colors.blue.shade200 : Colors.blue.shade800,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      TextField(
+                        controller: personaCtrl,
+                        maxLines: 3,
+                        decoration: const InputDecoration(
+                          labelText: 'Persona & Instrução do Sistema',
+                          hintText: 'Ex: Você é o Copiloto de IA...',
+                          alignLabelWithHint: true,
+                        ),
+                        style: TextStyle(fontSize: 12, color: context.cTextPrimary),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: rulesCtrl,
+                        maxLines: 4,
+                        decoration: const InputDecoration(
+                          labelText: 'Regras de Negócio',
+                          hintText: 'Regras de decisão para a IA...',
+                          alignLabelWithHint: true,
+                        ),
+                        style: TextStyle(fontSize: 12, color: context.cTextPrimary),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: toneCtrl,
+                        maxLines: 2,
+                        decoration: const InputDecoration(
+                          labelText: 'Tom de Voz',
+                          hintText: 'Ex: Linguagem corporativa de alto nível, objetiva...',
+                          alignLabelWithHint: true,
+                        ),
+                        style: TextStyle(fontSize: 12, color: context.cTextPrimary),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: avoidCtrl,
+                        maxLines: 2,
+                        decoration: const InputDecoration(
+                          labelText: 'O que Evitar',
+                          hintText: 'Ex: Evite atribuir culpas...',
+                          alignLabelWithHint: true,
+                        ),
+                        style: TextStyle(fontSize: 12, color: context.cTextPrimary),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: examplesCtrl,
+                        maxLines: 3,
+                        decoration: const InputDecoration(
+                          labelText: 'Exemplos de Saída Esperada',
+                          hintText: 'Exemplos práticos de comportamento...',
+                          alignLabelWithHint: true,
+                        ),
+                        style: TextStyle(fontSize: 12, color: context.cTextPrimary),
+                      ),
+                      const SizedBox(height: 16),
+                      
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          TextButton.icon(
+                            icon: const Icon(Icons.restore_rounded, size: 16),
+                            label: const Text('Restaurar Padrão', style: TextStyle(fontSize: 12)),
+                            onPressed: () async {
+                              final confirm = await showDialog<bool>(
+                                context: context,
+                                builder: (ctx) => AlertDialog(
+                                  backgroundColor: context.isDark ? AppColors.surfaceDark : AppColors.surface,
+                                  title: const Text('Confirmar Restauração'),
+                                  content: Text('Deseja restaurar as configurações padrão de "${selectedAgent.nameString}"?'),
+                                  actions: [
+                                    TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Não')),
+                                    TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Sim')),
+                                  ],
+                                ),
+                              );
+                              if (confirm == true) {
+                                await promptRepo.resetAgentConfig(selectedAgent);
+                                final defaults = AiPromptDefaults.getDefaultConfig(selectedAgent);
+                                setState(() {
+                                  if (selectedAgent == AiAgentType.taskRiskAnalysis) {
+                                    taskAgentConfig = defaults;
+                                  } else {
+                                    weeklyAgentConfig = defaults;
+                                  }
+                                  personaCtrl.text = defaults.systemInstruction;
+                                  rulesCtrl.text = defaults.businessRules;
+                                  toneCtrl.text = defaults.toneOfVoice;
+                                  avoidCtrl.text = defaults.avoidRules;
+                                  examplesCtrl.text = defaults.examples;
+                                });
+                                if (ctx.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                    content: Text('Prompt de "${selectedAgent.nameString}" restaurado para o padrão!'),
+                                    backgroundColor: AppColors.success,
+                                  ));
+                                }
+                              }
+                            },
+                          ),
+                          TextButton.icon(
+                            icon: const Icon(Icons.visibility_outlined, size: 16),
+                            label: const Text('Visualizar Prompt Final', style: TextStyle(fontSize: 12)),
+                            onPressed: () {
+                              final currentConfig = AiAgentConfig(
+                                agentType: selectedAgent,
+                                systemInstruction: personaCtrl.text,
+                                businessRules: rulesCtrl.text,
+                                toneOfVoice: toneCtrl.text,
+                                avoidRules: avoidCtrl.text,
+                                examples: examplesCtrl.text,
+                              );
+                              
+                              String finalPromptPreview;
+                              if (selectedAgent == AiAgentType.taskRiskAnalysis) {
+                                final mockTask = TaskData(
+                                  id: 'mock-id',
+                                  title: 'Desenvolver Dashboard de Métricas',
+                                  description: 'Criar visualização gráfica do progresso das tarefas mensais.',
+                                  status: 'in_progress',
+                                  priority: 'high',
+                                  isSlaCritical: true,
+                                  dueDate: DateTime.now().add(const Duration(days: 2)),
+                                  createdAt: DateTime.now().subtract(const Duration(days: 5)),
+                                  projectName: 'FlowSpace Core',
+                                );
+                                finalPromptPreview = AiPromptBuilder.buildTaskAnalysisPrompt(
+                                  task: mockTask,
+                                  comments: [
+                                    {'content': 'Iniciei a prototipagem das telas.', 'created_at': '2026-06-20', 'profiles': {'name': 'João'}}
+                                  ],
+                                  now: DateTime.now(),
+                                  config: currentConfig,
+                                );
+                              } else {
+                                final mockTasks = [
+                                  TaskData(id: '1', title: 'Ajustar bugs da API', status: 'done', priority: 'medium', isSlaCritical: false),
+                                  TaskData(id: '2', title: 'Homologação final', status: 'todo', priority: 'urgent', isSlaCritical: true, dueDate: DateTime.now().subtract(const Duration(days: 1))),
+                                ];
+                                finalPromptPreview = AiPromptBuilder.buildWeeklyReportPrompt(
+                                  allTasks: mockTasks,
+                                  now: DateTime.now(),
+                                  config: currentConfig,
+                                );
+                              }
+                              
+                              showDialog(
+                                context: context,
+                                builder: (ctx) => AlertDialog(
+                                  backgroundColor: context.isDark ? AppColors.surfaceDark : AppColors.surface,
+                                  title: Row(
+                                    children: [
+                                      const Icon(Icons.code_rounded, color: AppColors.primary),
+                                      const SizedBox(width: 8),
+                                      Text('Visualização do Prompt Final - ${selectedAgent.nameString}', style: Theme.of(context).textTheme.titleMedium),
+                                    ],
+                                  ),
+                                  content: SizedBox(
+                                    width: 700,
+                                    height: 500,
+                                    child: SingleChildScrollView(
+                                      child: Container(
+                                        padding: const EdgeInsets.all(12),
+                                        decoration: BoxDecoration(
+                                          color: context.isDark ? Colors.grey.shade900 : Colors.grey.shade100,
+                                          borderRadius: BorderRadius.circular(AppRadius.sm),
+                                          border: Border.all(color: context.isDark ? AppColors.borderDark : AppColors.border),
+                                        ),
+                                        child: SelectableText(
+                                          finalPromptPreview,
+                                          style: TextStyle(
+                                            fontFamily: 'monospace', 
+                                            fontSize: 11, 
+                                            color: context.isDark ? Colors.grey.shade300 : Colors.grey.shade800,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  actions: [
+                                    TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Fechar')),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
                     ],
-                    onChanged: (val) {
-                      if (val != null) {
-                        setState(() => selectedModel = val);
-                      }
-                    },
-                    style: TextStyle(fontSize: 13, color: context.cTextPrimary),
                   ),
-                ],
+                ),
               ),
               actions: [
                 TextButton(

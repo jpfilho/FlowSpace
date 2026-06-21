@@ -42,7 +42,7 @@ class _AiCopilotDashboardPageState extends ConsumerState<AiCopilotDashboardPage>
     final key = await aiService.getApiKey();
     if (key == null || key.isEmpty) {
       setState(() {
-        _apiError = 'A chave da API do Gemini não foi configurada. Acesse as Configurações para adicioná-la e usar o Copiloto IA.';
+        _apiError = 'A chave da API do ChatGPT (OpenAI) não foi configurada. Acesse as Configurações para adicioná-la e usar o Copiloto IA.';
       });
     } else {
       setState(() {
@@ -125,9 +125,6 @@ ${_weeklyReport!.humanDecisionPoints.map((d) => '- $d').join('\n')}
     final tasksAsync = ref.watch(tasksProvider);
     final recommendationsAsync = ref.watch(workspaceRecommendationsProvider);
     final isDesktop = Responsive.isDesktop(context);
-
-    // If API key error check again on build
-    _checkApiKey();
 
     return Scaffold(
       backgroundColor: context.cBackground,

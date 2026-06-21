@@ -1,21 +1,13 @@
 import '../../../auth/domain/data_providers.dart';
+import '../models/ai_agent_models.dart';
 
 class AiPromptBuilder {
-  static const String systemInstruction = '''
-Você é o Copiloto de IA de Gestão Operacional do FlowSpace. Sua função é apoiar gestores e equipes na identificação de riscos, prazos críticos, gargalos e próximos passos.
-Você deve agir de forma responsável e transparente:
-1. Você sugere, mas NÃO decide. Toda recomendação ou classificação deve ser justificada.
-2. Não julgue ou aponte culpados individuais. Foque em riscos de processos e melhoria de qualidade de dados.
-3. Se houver dados insuficientes, informe de forma clara quais informações estão faltando.
-4. Classifique riscos de forma conservadora.
-5. Indique claramente quando a decisão humana é obrigatória (ex: alterar prazos, mudar responsáveis, reclassificar como crítica).
-''';
-
   /// Builds a prompt for analyzing a specific task
   static String buildTaskAnalysisPrompt({
     required TaskData task,
     required List<Map<String, dynamic>> comments,
     required DateTime now,
+    required AiAgentConfig config,
   }) {
     final Map<String, String> statusMap = {
       'todo': 'A Fazer',
@@ -46,9 +38,23 @@ Você deve agir de forma responsável e transparente:
         : null;
 
     return '''
-Analise a seguinte tarefa do FlowSpace de acordo com os princípios operacionais:
+PAPEL DO ASSISTENTE:
+${config.systemInstruction}
 
-DADOS DA TAREFA:
+REGRAS DE NEGÓCIO:
+${config.businessRules}
+
+TOM DE VOZ:
+${config.toneOfVoice}
+
+O QUE EVITAR:
+${config.avoidRules}
+
+EXEMPLOS DE ANALISE:
+${config.examples}
+
+---
+DADOS DINÂMICOS DA TAREFA A SER ANALISADA:
 - Título: ${task.title}
 - Descrição: ${task.description ?? 'Sem descrição'}
 - Status Atual: ${statusMap[task.status] ?? task.status}
@@ -66,6 +72,8 @@ DADOS DA TAREFA:
 HISTÓRICO DE COMENTÁRIOS E ATUALIZAÇÕES:
 ${formattedComments.isEmpty ? 'Nenhum comentário registrado.' : formattedComments}
 
+---
+CONTRATO DE SAÍDA JSON OBRIGATÓRIO (FIXO):
 Você deve retornar obrigatoriamente um objeto JSON com o seguinte formato exato (sem Markdown em volta, apenas o JSON bruto):
 
 {
@@ -76,18 +84,9 @@ Você deve retornar obrigatoriamente um objeto JSON com o seguinte formato exato
   "suggested_next_step": "Ação imediata recomendada para o gestor ou equipe.",
   "confidence_score": 0.0 a 1.0 (nível de confiança na análise),
   "smart_alerts": [
-    "Lista de alertas inteligentes em formato de texto, ex: 'Tarefa próxima do vencimento sem atualização recente.', 'Prazo crítico sem responsável definido.'"
+    "Lista de alertas inteligentes em formato de texto"
   ]
 }
-
-REGRAS ADICIONAIS:
-- A classificação de risco deve ser:
-  * 'critical' se o prazo SLA ou due_date expirou e o status não é done/cancelled, ou se for SLA Crítico e faltar menos de 24 horas.
-  * 'high' se faltam menos de 3 dias, a tarefa está com status 'todo' ou 'in_progress', e não possui comentários recentes.
-  * 'medium' se há atrasos de andamento ou dependências.
-  * 'low' se está em dia e com informações completas.
-- O campo "risk_reason" deve explicar de forma curta e objetiva por que esse nível de risco foi selecionado.
-- Os "smart_alerts" devem listar alertas relevantes para a tarefa de forma direta.
 ''';
   }
 
@@ -95,6 +94,7 @@ REGRAS ADICIONAIS:
   static String buildWeeklyReportPrompt({
     required List<TaskData> allTasks,
     required DateTime now,
+    required AiAgentConfig config,
   }) {
     final totalOpen = allTasks.where((t) => t.status != 'done' && t.status != 'cancelled').length;
     final totalCompleted = allTasks.where((t) => t.status == 'done').length;
@@ -116,9 +116,24 @@ REGRAS ADICIONAIS:
     }).join('\n');
 
     return '''
-Gere um Resumo Executivo Semanal de Operações para o FlowSpace com base nos dados consolidados a seguir:
+PAPEL DO ASSISTENTE:
+${config.systemInstruction}
 
-ESTATÍSTICAS DA SEMANA (Data de referência da análise: ${now.toIso8601String()}):
+REGRAS DE NEGÓCIO:
+${config.businessRules}
+
+TOM DE VOZ:
+${config.toneOfVoice}
+
+O QUE EVITAR:
+${config.avoidRules}
+
+EXEMPLOS DE RELATORIO:
+${config.examples}
+
+---
+DADOS DINÂMICOS DO WORKSPACE A SEREM ANALISADOS:
+- Data de referência da análise: ${now.toIso8601String()}
 - Total de tarefas em aberto: $totalOpen
 - Total de tarefas concluídas: $totalCompleted
 - Total de tarefas de SLA Crítico em aberto: $totalCriticalSla
@@ -128,6 +143,8 @@ ESTATÍSTICAS DA SEMANA (Data de referência da análise: ${now.toIso8601String(
 LISTA DE TAREFAS ATIVAS DO WORKSPACE:
 $tasksDetails
 
+---
+CONTRATO DE SAÍDA JSON OBRIGATÓRIO (FIXO):
 Você deve retornar obrigatoriamente um objeto JSON com o seguinte formato exato (sem Markdown em volta, apenas o JSON bruto):
 
 {
@@ -143,8 +160,6 @@ Você deve retornar obrigatoriamente um objeto JSON com o seguinte formato exato
     "Ponto de decisão humana obrigatório 2"
   ]
 }
-
-Linguagem: Simples, objetiva, corporativa de alto nível, focada em riscos do processo e aprendizado, não em ranqueamento individual de pessoas.
 ''';
   }
 }
