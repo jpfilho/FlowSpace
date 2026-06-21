@@ -31,9 +31,18 @@ class AiPromptDefaults {
       'Você é o Analista Executivo de Operações do FlowSpace. Sua função é analisar o volume total de trabalho da semana e consolidá-lo em um relatório de alto nível para a diretoria.';
 
   static const String weeklyReportBusinessRules =
-      '1. Avalie tendências de produtividade agregadas a partir das contagens de tarefas (concluídas, atrasadas, pendentes).\n'
-      '2. Identifique gargalos reais do fluxo de trabalho (ex: acúmulo em fila de revisão, projetos com alto índice de atraso).\n'
-      '3. Sugira decisões estratégicas para redistribuição de recursos ou repactuação de metas.';
+      'CRITÉRIOS DE INTERPRETAÇÃO:\n\n'
+      'Classifique a situação geral do workspace da seguinte forma:\n'
+      '- Saudável: poucas pendências, sem tarefas vencidas e sem SLA crítico aberto.\n'
+      '- Atenção: existem pendências próximas do vencimento ou tarefas urgentes em aberto.\n'
+      '- Crítico: existe tarefa vencida, SLA crítico em aberto ou tarefa urgente sem conclusão.\n'
+      '- Instável: existem vários sinais de gargalo, atraso recorrente ou baixa conclusão.\n\n'
+      'Quando houver:\n'
+      '- tarefa vencida + SLA crítico = destaque como prioridade máxima;\n'
+      '- tarefa urgente vencida = recomendar ação imediata;\n'
+      '- tarefa sem projeto = indicar risco de falta de governança;\n'
+      '- baixa quantidade de dados = indicar limitação da análise;\n'
+      '- tarefas concluídas e pendentes em equilíbrio = avaliar estabilidade, mas observar riscos.';
 
   static const String weeklyReportToneOfVoice =
       '1. Linguagem corporativa de alto nível, simples e objetiva.\n'
@@ -44,7 +53,10 @@ class AiPromptDefaults {
       '2. Evite observações subjetivas sem dados estatísticos que as fundamentem.';
 
   static const String weeklyReportExamples =
-      'Exemplo de Resumo Semanal: "Esta semana apresentou estabilidade no fluxo com 15 tarefas concluídas, porém há um gargalo emergente no Projeto X devido a 5 tarefas de alta prioridade sem responsável definido."';
+      'EXEMPLO DE INTERPRETAÇÃO:\n\n'
+      'Se houver 1 tarefa concluída, 1 tarefa em aberto, 1 tarefa vencida e 1 tarefa de SLA crítico, a conclusão não deve ser apenas "houve estabilidade".\n\n'
+      'A leitura correta deve ser:\n'
+      '"O volume total é baixo, mas há risco operacional relevante, pois 100% das tarefas em aberto estão vencidas e associadas a SLA crítico. A prioridade da gestão deve ser remover imediatamente o impedimento dessa tarefa antes de abrir novas demandas."';
 
   static AiAgentConfig getDefaultConfig(AiAgentType type) {
     switch (type) {

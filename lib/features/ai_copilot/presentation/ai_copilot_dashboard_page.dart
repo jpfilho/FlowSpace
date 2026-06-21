@@ -95,8 +95,14 @@ class _AiCopilotDashboardPageState extends ConsumerState<AiCopilotDashboardPage>
     if (_weeklyReport == null) return;
 
     final text = '''
-=== RESUMO EXECUTIVO SEMANAL — FLOWSPACE ===
+=== RELATÓRIO EXECUTIVO SEMANAL — FLOWSPACE ===
+Status Geral do Workspace: ${_weeklyReport!.workspaceHealth}
+
+Resumo Geral:
 ${_weeklyReport!.weeklySummary}
+
+Análise de Produtividade:
+${_weeklyReport!.productivityAnalysis}
 
 Gargalos Críticos:
 ${_weeklyReport!.criticalBottlenecks}
@@ -104,17 +110,26 @@ ${_weeklyReport!.criticalBottlenecks}
 Riscos Emergentes:
 ${_weeklyReport!.emergingRisks}
 
-Recomendações da Semana:
+Oportunidades de Eficiência:
+${_weeklyReport!.efficiencyOpportunities.map((r) => '- $r').join('\n')}
+
+Recomendações Práticas:
 ${_weeklyReport!.recommendations.map((r) => '- $r').join('\n')}
 
 Pontos de Decisão Humana Obrigatória:
 ${_weeklyReport!.humanDecisionPoints.map((d) => '- $d').join('\n')}
+
+Ações Prioritárias (Próximos 7 Dias):
+${_weeklyReport!.priorityActionsNext7Days.map((a) => '- $a').join('\n')}
+
+Qualidade dos Dados:
+${_weeklyReport!.dataQualityNotes}
 ''';
 
     Clipboard.setData(ClipboardData(text: text));
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Resumo copiado para a área de transferência!'),
+        content: Text('Relatório completo copiado para a área de transferência!'),
         backgroundColor: AppColors.success,
       ),
     );
@@ -457,6 +472,11 @@ ${_weeklyReport!.humanDecisionPoints.map((d) => '- $d').join('\n')}
 
   Widget _buildWeeklyReportView() {
     final isDark = context.isDark;
+    final isDesktop = Responsive.isDesktop(context);
+    final health = _weeklyReport!.workspaceHealth;
+    final healthColor = _getHealthColor(health);
+    final healthIcon = _getHealthIcon(health);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -465,6 +485,30 @@ ${_weeklyReport!.humanDecisionPoints.map((d) => '- $d').join('\n')}
             Text(
               'Relatório Gerado',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(width: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: healthColor.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(AppRadius.full),
+                border: Border.all(color: healthColor.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(healthIcon, size: 14, color: healthColor),
+                  const SizedBox(width: 6),
+                  Text(
+                    health,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: healthColor,
+                    ),
+                  ),
+                ],
+              ),
             ),
             const Spacer(),
             FlowButton(
@@ -477,61 +521,232 @@ ${_weeklyReport!.humanDecisionPoints.map((d) => '- $d').join('\n')}
         ),
         const SizedBox(height: AppSpacing.sp16),
         
-        // General Summary Card
+        // General Summary & Productivity Analysis
+        if (isDesktop)
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: _buildSectionCard(
+                  title: 'Resumo Geral',
+                  icon: Icons.summarize_outlined,
+                  color: AppColors.primary,
+                  content: _weeklyReport!.weeklySummary,
+                  isDark: isDark,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sp16),
+              Expanded(
+                child: _buildSectionCard(
+                  title: 'Análise de Produtividade',
+                  icon: Icons.analytics_outlined,
+                  color: const Color(0xFF0EA5E9), // Sky Blue
+                  content: _weeklyReport!.productivityAnalysis,
+                  isDark: isDark,
+                ),
+              ),
+            ],
+          )
+        else ...[
+          _buildSectionCard(
+            title: 'Resumo Geral',
+            icon: Icons.summarize_outlined,
+            color: AppColors.primary,
+            content: _weeklyReport!.weeklySummary,
+            isDark: isDark,
+          ),
+          const SizedBox(height: AppSpacing.sp16),
+          _buildSectionCard(
+            title: 'Análise de Produtividade',
+            icon: Icons.analytics_outlined,
+            color: const Color(0xFF0EA5E9),
+            content: _weeklyReport!.productivityAnalysis,
+            isDark: isDark,
+          ),
+        ],
+        const SizedBox(height: AppSpacing.sp16),
+
+        // Bottlenecks & Risks
+        if (isDesktop)
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: _buildSectionCard(
+                  title: 'Gargalos Identificados',
+                  icon: Icons.grid_off_rounded,
+                  color: AppColors.error,
+                  content: _weeklyReport!.criticalBottlenecks,
+                  isDark: isDark,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sp16),
+              Expanded(
+                child: _buildSectionCard(
+                  title: 'Riscos Emergentes',
+                  icon: Icons.trending_up_rounded,
+                  color: AppColors.warning,
+                  content: _weeklyReport!.emergingRisks,
+                  isDark: isDark,
+                ),
+              ),
+            ],
+          )
+        else ...[
+          _buildSectionCard(
+            title: 'Gargalos Identificados',
+            icon: Icons.grid_off_rounded,
+            color: AppColors.error,
+            content: _weeklyReport!.criticalBottlenecks,
+            isDark: isDark,
+          ),
+          const SizedBox(height: AppSpacing.sp16),
+          _buildSectionCard(
+            title: 'Riscos Emergentes',
+            icon: Icons.trending_up_rounded,
+            color: AppColors.warning,
+            content: _weeklyReport!.emergingRisks,
+            isDark: isDark,
+          ),
+        ],
+        const SizedBox(height: AppSpacing.sp16),
+
+        // Recommendations & Efficiency Opportunities
+        if (isDesktop)
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: _buildListSectionCard(
+                  title: 'Recomendações Práticas',
+                  icon: Icons.playlist_add_check_rounded,
+                  color: AppColors.success,
+                  items: _weeklyReport!.recommendations,
+                  isDark: isDark,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sp16),
+              Expanded(
+                child: _buildListSectionCard(
+                  title: 'Oportunidades de Eficiência',
+                  icon: Icons.lightbulb_outline_rounded,
+                  color: const Color(0xFFEAB308), // Amber/Yellow
+                  items: _weeklyReport!.efficiencyOpportunities,
+                  isDark: isDark,
+                ),
+              ),
+            ],
+          )
+        else ...[
+          _buildListSectionCard(
+            title: 'Recomendações Práticas',
+            icon: Icons.playlist_add_check_rounded,
+            color: AppColors.success,
+            items: _weeklyReport!.recommendations,
+            isDark: isDark,
+          ),
+          const SizedBox(height: AppSpacing.sp16),
+          _buildListSectionCard(
+            title: 'Oportunidades de Eficiência',
+            icon: Icons.lightbulb_outline_rounded,
+            color: const Color(0xFFEAB308),
+            items: _weeklyReport!.efficiencyOpportunities,
+            isDark: isDark,
+          ),
+        ],
+        const SizedBox(height: AppSpacing.sp16),
+
+        // Human Decisions & Actions Next 7 Days
+        if (isDesktop)
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: _buildListSectionCard(
+                  title: 'Decisões Humanas Obrigatórias',
+                  icon: Icons.gavel_rounded,
+                  color: AppColors.error,
+                  items: _weeklyReport!.humanDecisionPoints,
+                  isDark: isDark,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sp16),
+              Expanded(
+                child: _buildListSectionCard(
+                  title: 'Ações Prioritárias (Próx. 7 dias)',
+                  icon: Icons.notifications_active_outlined,
+                  color: const Color(0xFF8B5CF6), // Purple
+                  items: _weeklyReport!.priorityActionsNext7Days,
+                  isDark: isDark,
+                ),
+              ),
+            ],
+          )
+        else ...[
+          _buildListSectionCard(
+            title: 'Decisões Humanas Obrigatórias',
+            icon: Icons.gavel_rounded,
+            color: AppColors.error,
+            items: _weeklyReport!.humanDecisionPoints,
+            isDark: isDark,
+          ),
+          const SizedBox(height: AppSpacing.sp16),
+          _buildListSectionCard(
+            title: 'Ações Prioritárias (Próx. 7 dias)',
+            icon: Icons.notifications_active_outlined,
+            color: const Color(0xFF8B5CF6),
+            items: _weeklyReport!.priorityActionsNext7Days,
+            isDark: isDark,
+          ),
+        ],
+        const SizedBox(height: AppSpacing.sp16),
+
+        // Data Quality Notes
         _buildSectionCard(
-          title: 'Resumo Geral',
-          icon: Icons.summarize_outlined,
-          color: AppColors.primary,
-          content: _weeklyReport!.weeklySummary,
-          isDark: isDark,
-        ),
-        const SizedBox(height: AppSpacing.sp16),
-
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: _buildSectionCard(
-                title: 'Gargalos Identificados',
-                icon: Icons.grid_off_rounded,
-                color: AppColors.error,
-                content: _weeklyReport!.criticalBottlenecks,
-                isDark: isDark,
-              ),
-            ),
-            const SizedBox(width: AppSpacing.sp16),
-            Expanded(
-              child: _buildSectionCard(
-                title: 'Riscos Emergentes',
-                icon: Icons.trending_up_rounded,
-                color: AppColors.warning,
-                content: _weeklyReport!.emergingRisks,
-                isDark: isDark,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.sp16),
-
-        // List fields
-        _buildListSectionCard(
-          title: 'Recomendações Operacionais',
-          icon: Icons.playlist_add_check_rounded,
-          color: AppColors.success,
-          items: _weeklyReport!.recommendations,
-          isDark: isDark,
-        ),
-        const SizedBox(height: AppSpacing.sp16),
-
-        _buildListSectionCard(
-          title: 'Decisões Humanas Obrigatórias',
-          icon: Icons.gavel_rounded,
-          color: AppColors.error,
-          items: _weeklyReport!.humanDecisionPoints,
+          title: 'Qualidade dos Dados & Observações',
+          icon: Icons.info_outline_rounded,
+          color: context.cTextMuted,
+          content: _weeklyReport!.dataQualityNotes,
           isDark: isDark,
         ),
       ],
     );
+  }
+
+  Color _getHealthColor(String health) {
+    switch (health.trim().toLowerCase()) {
+      case 'saudável':
+      case 'saudavel':
+        return AppColors.success;
+      case 'atenção':
+      case 'atencao':
+        return AppColors.warning;
+      case 'crítico':
+      case 'critico':
+        return AppColors.error;
+      case 'instável':
+      case 'instavel':
+      default:
+        return const Color(0xFF8B5CF6);
+    }
+  }
+
+  IconData _getHealthIcon(String health) {
+    switch (health.trim().toLowerCase()) {
+      case 'saudável':
+      case 'saudavel':
+        return Icons.check_circle_rounded;
+      case 'atenção':
+      case 'atencao':
+        return Icons.warning_rounded;
+      case 'crítico':
+      case 'critico':
+        return Icons.gavel_rounded;
+      case 'instável':
+      case 'instavel':
+      default:
+        return Icons.insights_rounded;
+    }
   }
 
   Widget _buildSectionCard({

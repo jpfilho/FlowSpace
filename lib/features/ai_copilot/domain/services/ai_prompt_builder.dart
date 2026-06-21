@@ -145,20 +145,33 @@ $tasksDetails
 
 ---
 CONTRATO DE SAÍDA JSON OBRIGATÓRIO (FIXO):
-Você deve retornar obrigatoriamente um objeto JSON com o seguinte formato exato (sem Markdown em volta, apenas o JSON bruto):
+Você deve retornar obrigatoriamente apenas um objeto JSON válido, sem Markdown, sem comentários e sem texto adicional fora do JSON.
+
+Use exatamente o seguinte formato:
 
 {
-  "weekly_summary": "Visão geral executiva simples do status do workspace esta semana.",
-  "critical_bottlenecks": "Descrição dos principais gargalos operacionais identificados (ex: acúmulo de tarefas urgentes, atrasos recorrentes).",
-  "emerging_risks": "Descrição de riscos operacionais que podem surgir nos próximos dias.",
+  "workspace_health": "Saudável | Atenção | Crítico | Instável",
+  "weekly_summary": "Resumo executivo simples e objetivo do status do workspace, destacando produtividade, eficiência e riscos principais.",
+  "productivity_analysis": "Análise agregada da produtividade com base nas tarefas concluídas, abertas, vencidas e críticas.",
+  "critical_bottlenecks": "Descrição dos principais gargalos operacionais identificados, agrupando problemas por categoria, projeto ou tipo de risco.",
+  "emerging_risks": "Descrição dos riscos que podem afetar produtividade, prazos, SLA ou qualidade da entrega nos próximos dias.",
+  "efficiency_opportunities": [
+    "Oportunidade objetiva para melhorar eficiência 1",
+    "Oportunidade objetiva para melhorar eficiência 2"
+  ],
   "recommendations": [
-    "Recomendação 1 para o gestor",
-    "Recomendação 2 para o gestor"
+    "Recomendação prática 1 para o gestor aumentar produtividade ou reduzir risco",
+    "Recomendação prática 2 para o gestor aumentar produtividade ou reduzir risco"
   ],
   "human_decision_points": [
-    "Ponto de decisão humana obrigatório 1",
-    "Ponto de decisão humana obrigatório 2"
-  ]
+    "Decisão humana obrigatória 1",
+    "Decisão humana obrigatória 2"
+  ],
+  "priority_actions_next_7_days": [
+    "Ação prioritária 1 para os próximos 7 dias",
+    "Ação prioritária 2 para os próximos 7 dias"
+  ],
+  "data_quality_notes": "Observações sobre limitações dos dados, campos ausentes ou informações necessárias para melhorar a análise."
 }
 ''';
   }

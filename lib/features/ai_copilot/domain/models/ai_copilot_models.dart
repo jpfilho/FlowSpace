@@ -207,18 +207,28 @@ class AiAuditLog {
 }
 
 class AiWeeklyReport {
+  final String workspaceHealth;
   final String weeklySummary;
+  final String productivityAnalysis;
   final String criticalBottlenecks;
   final String emergingRisks;
+  final List<String> efficiencyOpportunities;
   final List<String> recommendations;
   final List<String> humanDecisionPoints;
+  final List<String> priorityActionsNext7Days;
+  final String dataQualityNotes;
 
   const AiWeeklyReport({
+    required this.workspaceHealth,
     required this.weeklySummary,
+    required this.productivityAnalysis,
     required this.criticalBottlenecks,
     required this.emergingRisks,
+    required this.efficiencyOpportunities,
     required this.recommendations,
     required this.humanDecisionPoints,
+    required this.priorityActionsNext7Days,
+    required this.dataQualityNotes,
   });
 
   factory AiWeeklyReport.fromJson(Map<String, dynamic> json) {
@@ -230,21 +240,31 @@ class AiWeeklyReport {
     }
 
     return AiWeeklyReport(
+      workspaceHealth: json['workspace_health'] as String? ?? 'Saudável',
       weeklySummary: json['weekly_summary'] as String? ?? '',
+      productivityAnalysis: json['productivity_analysis'] as String? ?? '',
       criticalBottlenecks: json['critical_bottlenecks'] as String? ?? '',
       emergingRisks: json['emerging_risks'] as String? ?? '',
+      efficiencyOpportunities: parseList(json['efficiency_opportunities']),
       recommendations: parseList(json['recommendations']),
       humanDecisionPoints: parseList(json['human_decision_points']),
+      priorityActionsNext7Days: parseList(json['priority_actions_next_7_days']),
+      dataQualityNotes: json['data_quality_notes'] as String? ?? '',
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
+      'workspace_health': workspaceHealth,
       'weekly_summary': weeklySummary,
+      'productivity_analysis': productivityAnalysis,
       'critical_bottlenecks': criticalBottlenecks,
       'emerging_risks': emergingRisks,
+      'efficiency_opportunities': efficiencyOpportunities,
       'recommendations': recommendations,
       'human_decision_points': humanDecisionPoints,
+      'priority_actions_next_7_days': priorityActionsNext7Days,
+      'data_quality_notes': dataQualityNotes,
     };
   }
 }
