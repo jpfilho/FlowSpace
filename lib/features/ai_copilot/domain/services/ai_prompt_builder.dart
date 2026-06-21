@@ -37,7 +37,9 @@ class AiPromptBuilder {
         ? now.difference(task.createdAt!).inDays
         : null;
 
-    return '''
+    final instructions = config.businessRules.isEmpty
+        ? config.systemInstruction
+        : '''
 PAPEL DO ASSISTENTE:
 ${config.systemInstruction}
 
@@ -51,7 +53,11 @@ O QUE EVITAR:
 ${config.avoidRules}
 
 EXEMPLOS DE ANALISE:
-${config.examples}
+${config.examples}''';
+
+    return '''
+INSTRUÇÕES DO ASSISTENTE:
+$instructions
 
 ---
 DADOS DINÂMICOS DA TAREFA A SER ANALISADA:
@@ -115,7 +121,9 @@ Você deve retornar obrigatoriamente um objeto JSON com o seguinte formato exato
       return '- Título: "${t.title}", Status: "${t.status}", Prioridade: "${t.priority}", Projeto: "${t.projectName ?? 'Nenhum'}", Vence em: "${t.dueDate?.toIso8601String() ?? 'N/A'}", SLA Crítico: ${t.isSlaCritical ? 'Sim' : 'Não'}';
     }).join('\n');
 
-    return '''
+    final instructions = config.businessRules.isEmpty
+        ? config.systemInstruction
+        : '''
 PAPEL DO ASSISTENTE:
 ${config.systemInstruction}
 
@@ -129,7 +137,11 @@ O QUE EVITAR:
 ${config.avoidRules}
 
 EXEMPLOS DE RELATORIO:
-${config.examples}
+${config.examples}''';
+
+    return '''
+INSTRUÇÕES DO ASSISTENTE:
+$instructions
 
 ---
 DADOS DINÂMICOS DO WORKSPACE A SEREM ANALISADOS:

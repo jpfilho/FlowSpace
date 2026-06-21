@@ -25,6 +25,31 @@ class AiAgentConfig {
     required this.examples,
   });
 
+  String getCombinedText() {
+    if (businessRules.isEmpty &&
+        toneOfVoice.isEmpty &&
+        avoidRules.isEmpty &&
+        examples.isEmpty) {
+      return systemInstruction;
+    }
+    final buffer = StringBuffer();
+    buffer.writeln('=== PERSONA & INSTRUÇÃO DO SISTEMA ===');
+    buffer.writeln(systemInstruction);
+    buffer.writeln();
+    buffer.writeln('=== REGRAS DE NEGÓCIO ===');
+    buffer.writeln(businessRules);
+    buffer.writeln();
+    buffer.writeln('=== TOM DE VOZ ===');
+    buffer.writeln(toneOfVoice);
+    buffer.writeln();
+    buffer.writeln('=== O QUE EVITAR ===');
+    buffer.writeln(avoidRules);
+    buffer.writeln();
+    buffer.writeln('=== EXEMPLOS DE SAÍDA ESPERADA ===');
+    buffer.writeln(examples);
+    return buffer.toString().trim();
+  }
+
   Map<String, dynamic> toJson() {
     return {
       'agentType': agentType.name,

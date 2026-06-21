@@ -699,11 +699,9 @@ class SettingsPage extends ConsumerWidget {
     final weeklyConfig = await promptRepo.getAgentConfig(AiAgentType.weeklyExecutiveReport);
 
     final keyCtrl = TextEditingController(text: currentKey);
-    final personaCtrl = TextEditingController(text: taskConfig.systemInstruction);
-    final rulesCtrl = TextEditingController(text: taskConfig.businessRules);
-    final toneCtrl = TextEditingController(text: taskConfig.toneOfVoice);
-    final avoidCtrl = TextEditingController(text: taskConfig.avoidRules);
-    final examplesCtrl = TextEditingController(text: taskConfig.examples);
+    final instructionsCtrl = TextEditingController(
+      text: taskConfig.getCombinedText(),
+    );
     
     // Safety check: if old model is Gemini, fallback to gpt-4o-mini
     final allowedModels = ['gpt-4o-mini', 'gpt-4o'];
@@ -808,11 +806,11 @@ class SettingsPage extends ConsumerWidget {
                             // 1. Save current controller text to old agent config
                             final currentConfig = AiAgentConfig(
                               agentType: selectedAgent,
-                              systemInstruction: personaCtrl.text,
-                              businessRules: rulesCtrl.text,
-                              toneOfVoice: toneCtrl.text,
-                              avoidRules: avoidCtrl.text,
-                              examples: examplesCtrl.text,
+                              systemInstruction: instructionsCtrl.text,
+                              businessRules: '',
+                              toneOfVoice: '',
+                              avoidRules: '',
+                              examples: '',
                             );
                             if (selectedAgent == AiAgentType.taskRiskAnalysis) {
                               taskAgentConfig = currentConfig;
@@ -824,11 +822,7 @@ class SettingsPage extends ConsumerWidget {
                             setState(() {
                               selectedAgent = val;
                               final newConfig = val == AiAgentType.taskRiskAnalysis ? taskAgentConfig : weeklyAgentConfig;
-                              personaCtrl.text = newConfig.systemInstruction;
-                              rulesCtrl.text = newConfig.businessRules;
-                              toneCtrl.text = newConfig.toneOfVoice;
-                              avoidCtrl.text = newConfig.avoidRules;
-                              examplesCtrl.text = newConfig.examples;
+                              instructionsCtrl.text = newConfig.getCombinedText();
                             });
                           }
                         },
@@ -850,7 +844,7 @@ class SettingsPage extends ConsumerWidget {
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                'Aviso: Você está personalizando o comportamento corporativo do assistente. '
+                                'Aviso: Você está personalizando as diretrizes de comportamento do assistente. '
                                 'A estrutura técnica de saída (JSON) é mantida fixa pelo sistema '
                                 'para garantir que o aplicativo funcione sem quebras.',
                                 style: TextStyle(
@@ -865,58 +859,15 @@ class SettingsPage extends ConsumerWidget {
                       const SizedBox(height: 16),
 
                       TextField(
-                        controller: personaCtrl,
-                        maxLines: 3,
+                        controller: instructionsCtrl,
+                        maxLines: 15,
+                        minLines: 8,
                         decoration: const InputDecoration(
-                          labelText: 'Persona & Instrução do Sistema',
-                          hintText: 'Ex: Você é o Copiloto de IA...',
+                          labelText: 'Instruções e Diretrizes do Assistente',
+                          hintText: 'Defina as instruções de persona, regras de negócio e exemplos em um único bloco de texto...',
                           alignLabelWithHint: true,
                         ),
-                        style: TextStyle(fontSize: 12, color: context.cTextPrimary),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: rulesCtrl,
-                        maxLines: 4,
-                        decoration: const InputDecoration(
-                          labelText: 'Regras de Negócio',
-                          hintText: 'Regras de decisão para a IA...',
-                          alignLabelWithHint: true,
-                        ),
-                        style: TextStyle(fontSize: 12, color: context.cTextPrimary),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: toneCtrl,
-                        maxLines: 2,
-                        decoration: const InputDecoration(
-                          labelText: 'Tom de Voz',
-                          hintText: 'Ex: Linguagem corporativa de alto nível, objetiva...',
-                          alignLabelWithHint: true,
-                        ),
-                        style: TextStyle(fontSize: 12, color: context.cTextPrimary),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: avoidCtrl,
-                        maxLines: 2,
-                        decoration: const InputDecoration(
-                          labelText: 'O que Evitar',
-                          hintText: 'Ex: Evite atribuir culpas...',
-                          alignLabelWithHint: true,
-                        ),
-                        style: TextStyle(fontSize: 12, color: context.cTextPrimary),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: examplesCtrl,
-                        maxLines: 3,
-                        decoration: const InputDecoration(
-                          labelText: 'Exemplos de Saída Esperada',
-                          hintText: 'Exemplos práticos de comportamento...',
-                          alignLabelWithHint: true,
-                        ),
-                        style: TextStyle(fontSize: 12, color: context.cTextPrimary),
+                        style: TextStyle(fontSize: 12, color: context.cTextPrimary, fontFamily: 'monospace', height: 1.4),
                       ),
                       const SizedBox(height: 16),
                       
@@ -948,11 +899,7 @@ class SettingsPage extends ConsumerWidget {
                                   } else {
                                     weeklyAgentConfig = defaults;
                                   }
-                                  personaCtrl.text = defaults.systemInstruction;
-                                  rulesCtrl.text = defaults.businessRules;
-                                  toneCtrl.text = defaults.toneOfVoice;
-                                  avoidCtrl.text = defaults.avoidRules;
-                                  examplesCtrl.text = defaults.examples;
+                                  instructionsCtrl.text = defaults.getCombinedText();
                                 });
                                 if (ctx.mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -969,11 +916,11 @@ class SettingsPage extends ConsumerWidget {
                             onPressed: () {
                               final currentConfig = AiAgentConfig(
                                 agentType: selectedAgent,
-                                systemInstruction: personaCtrl.text,
-                                businessRules: rulesCtrl.text,
-                                toneOfVoice: toneCtrl.text,
-                                avoidRules: avoidCtrl.text,
-                                examples: examplesCtrl.text,
+                                systemInstruction: instructionsCtrl.text,
+                                businessRules: '',
+                                toneOfVoice: '',
+                                avoidRules: '',
+                                examples: '',
                               );
                               
                               String finalPromptPreview;
@@ -1062,6 +1009,37 @@ class SettingsPage extends ConsumerWidget {
                 ),
                 ElevatedButton(
                   onPressed: () async {
+                    // 1. Update current config in memory from text field
+                    final currentCombinedText = instructionsCtrl.text;
+                    final updatedConfig = AiAgentConfig(
+                      agentType: selectedAgent,
+                      systemInstruction: currentCombinedText,
+                      businessRules: '',
+                      toneOfVoice: '',
+                      avoidRules: '',
+                      examples: '',
+                    );
+                    if (selectedAgent == AiAgentType.taskRiskAnalysis) {
+                      taskAgentConfig = updatedConfig;
+                    } else {
+                      weeklyAgentConfig = updatedConfig;
+                    }
+
+                    // 2. Save both configs to Supabase
+                    try {
+                      await promptRepo.saveAgentConfig(taskAgentConfig);
+                      await promptRepo.saveAgentConfig(weeklyAgentConfig);
+                    } catch (e) {
+                      if (ctx.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                          content: Text('Erro ao salvar promts no Supabase: $e'),
+                          backgroundColor: AppColors.error,
+                        ));
+                      }
+                      return;
+                    }
+
+                    // 3. Save OpenAI API key & model
                     final key = keyCtrl.text.trim();
                     if (key.isEmpty) {
                       await service.deleteApiKey();
